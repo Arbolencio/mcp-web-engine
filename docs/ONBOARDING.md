@@ -1,6 +1,13 @@
-# 🚀 Guía de Onboarding Beta — MCP Web Engine
+# 🚀 Guía de Onboarding Beta Pública — MCP Web Engine
 
-> **Guía rápida de 1 página para conectar tu cliente MCP (Claude Desktop, Cursor, Windsurf, Hermes Agent) en < 3 minutos.**
+> **Guía rápida de 1 página para conectar tu cliente MCP (Claude Desktop, Cursor, Windsurf, Inspector) al endpoint HTTPS público en < 3 minutos.**
+
+---
+
+## 🌐 Endpoint Público de Producción HTTPS
+
+- **Endpoint MCP 2026-07-28:** `https://surveys-networking-titled-middle.trycloudflare.com/v1/mcp`
+- **Health Check:** `https://surveys-networking-titled-middle.trycloudflare.com/health`
 
 ---
 
@@ -13,10 +20,10 @@ Cada clave Beta cuenta con un límite de **10,000 peticiones** y una tasa máxim
 
 ## ⚙️ Paso 2: Configura tu Cliente MCP
 
-### A. Configuración en Cursor / Windsurf / MCP Inspector (Conexión Directa HTTP)
+### A. Configuración en Cursor / Windsurf / MCP Inspector (Conexión Directa HTTPS)
 1. Abre los ajustes de **MCP / Custom Tools** en tu IDE.
 2. Añade un nuevo servidor con la siguiente URL:
-   - **URL:** `http://192.168.1.144:5050/v1/mcp`
+   - **URL:** `https://surveys-networking-titled-middle.trycloudflare.com/v1/mcp`
 3. Añade la cabecera HTTP de autenticación:
    - **Header Name:** `Authorization`
    - **Header Value:** `Bearer sk_mcp_beta_TU_CLAVE_AQUÍ`
@@ -34,7 +41,7 @@ Abre tu archivo `claude_desktop_config.json` y añade:
       "args": [
         "-y",
         "mcp-remote",
-        "http://192.168.1.144:5050/v1/mcp",
+        "https://surveys-networking-titled-middle.trycloudflare.com/v1/mcp",
         "--header",
         "Authorization: Bearer sk_mcp_beta_TU_CLAVE_AQUÍ"
       ]

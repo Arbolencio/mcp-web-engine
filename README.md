@@ -1,12 +1,19 @@
 # 🌐 MCP Web Engine & Search Gateway
 
-> **Pure Stateless MCP Specification 2026-07-28 Core Server & Web Engine for AI Agents**
+> **Public HTTPS Specification 2026-07-28 Pure Stateless Core MCP Server for AI Agents**
+
+---
+
+## 🌐 Public Production HTTPS Endpoint
+
+- **Public MCP 2026-07-28 Endpoint:** `https://surveys-networking-titled-middle.trycloudflare.com/v1/mcp`
+- **Health Check:** `https://surveys-networking-titled-middle.trycloudflare.com/health`
 
 ---
 
 ## 📌 What it does & Why it exists
 
-`MCP Web Engine` is a high-performance Model Context Protocol (MCP) server implementing the **MCP Specification 2026-07-28 Pure Stateless Core** (JSON-RPC 2.0 over HTTP). It provides AI Agents (Claude Desktop, Cursor, Windsurf, MCP Inspector, Hermes Agent) with secure, private access to web search, raw content fetching, and clean HTML-to-Markdown extraction.
+`MCP Web Engine` is a high-performance Model Context Protocol (MCP) server implementing the **MCP Specification 2026-07-28 Pure Stateless Core** (JSON-RPC 2.0 over HTTPS). It provides AI Agents (Claude Desktop, Cursor, Windsurf, MCP Inspector, Hermes Agent) with secure, private access to web search, raw content fetching, and clean HTML-to-Markdown extraction.
 
 ### Key Capabilities & Architecture
 - **Pure Stateless Core (Spec 2026-07-28):** Zero sessions, zero state, zero initialize handshake required. Every request is completely independent.
@@ -22,8 +29,11 @@
 ```
 [ MCP Client / Claude / Cursor / Windsurf / Inspector ]
                          │
-        (HTTP Header: Authorization: Bearer sk_mcp_...)
-        (HTTP Header: MCP-Protocol-Version: 2026-07-28)
+        (HTTPS Header: Authorization: Bearer sk_mcp_...)
+        (HTTPS Header: MCP-Protocol-Version: 2026-07-28)
+                         ▼
+        [ Cloudflare HTTPS Secure Tunnel ]
+                         │
                          ▼
         [ FastAPI Gateway (Port 5050) ]
            ├── Endpoint: POST /v1/mcp (Pure Stateless Core)
@@ -50,19 +60,37 @@ cp .env.example .env
 docker compose up -d
 
 # 4. Verify Health Check
-curl -s http://localhost:5050/health
+curl -s https://surveys-networking-titled-middle.trycloudflare.com/health
 # {"status":"ok","environment":"production","searxng_url":"http://host.docker.internal:8082/search","mcp_version":"2026-07-28"}
 ```
 
 ---
 
-## 🔌 Connecting from MCP Clients (Cursor, Windsurf, Inspector)
+## 🔌 Connecting from MCP Clients (Cursor, Windsurf, Inspector, Claude Desktop)
 
-### Direct HTTP Streamable Endpoint:
-- **Server Endpoint:** `http://YOUR_SERVER_IP:5050/v1/mcp`
+### 1. Cursor / Windsurf / MCP Inspector (Direct HTTPS):
+- **Server Endpoint:** `https://surveys-networking-titled-middle.trycloudflare.com/v1/mcp`
 - **Headers:**
   - `Authorization: Bearer YOUR_BETA_KEY_HERE`
   - `MCP-Protocol-Version: 2026-07-28`
+
+### 2. Claude Desktop (via `mcp-remote` bridge):
+```json
+{
+  "mcpServers": {
+    "mcp-web-engine": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://surveys-networking-titled-middle.trycloudflare.com/v1/mcp",
+        "--header",
+        "Authorization: Bearer YOUR_BETA_KEY_HERE"
+      ]
+    }
+  }
+}
+```
 
 ---
 
@@ -111,14 +139,14 @@ curl -s http://localhost:5050/health
 Manage API access keys using the CLI helper:
 
 ```bash
-# Generate 15 Beta Keys
-python manage_beta_keys.py generate --count 15
+# Generate 20 Beta Keys
+python manage_beta_keys.py init20
 
-# List active keys
-python manage_beta_keys.py list
+# View Beta User Telemetry
+python manage_beta_keys.py telemetry
 
-# Revoke a key
-python manage_beta_keys.py revoke --key sk_mcp_beta_...
+# Revoke a key by ID
+python manage_beta_keys.py revoke --id Beta_001
 ```
 
 ---
