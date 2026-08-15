@@ -1,20 +1,20 @@
 """
-MCP Protocol Handler:
-- 2026-07-28: Pure Stateless Core (server/discover, tools/list, tools/call) - NO sessions / NO initialize.
-- 2025-11-25: Legacy Stateful Protocol (initialize, notifications/initialized, Mcp-Session-Id).
+MCP Protocol Handler (Spec 2026-07-28 Pure Stateless Core with Header Validation & Cache Metadata)
 """
 import json
 import time
 import secrets
 from typing import Optional
-from fastapi import status
+from fastapi import status, HTTPException
 from mcp_tools import MCP_TOOL_DEFINITIONS, handle_mcp_tool_call
 from logging_obs import logger, metrics
 
 MCP_PROTOCOL_VERSION_2026 = "2026-07-28"
 MCP_PROTOCOL_VERSION_LEGACY = "2025-11-25"
 
-# Legacy 2025-11-25 Sessions Store ONLY
+REGISTERED_TOOL_NAMES = {t["name"] for t in MCP_TOOL_DEFINITIONS}
+VALID_2026_METHODS = {"server/discover", "tools/list", "tools/call"}
+
 legacy_sessions = {}
 
 # JSON-RPC 2.0 Error Codes
@@ -41,12 +41,66 @@ def make_jsonrpc_error(request_id, code, message, data=None):
         "error": err_obj
     }
 
+def validate_2026_mcp_headers(
+    header_mcp_version: Optional[str],
+    header_mcp_method: Optional[str],
+    header_mcp_name: Optional[str],
+    payload: dict
+):
+    """
+    Validates MCP 2026-07-28 headers and ensures strict correspondence with JSON-RPC body.
+    """
+    # 1. Validate MCP-Protocol-Version
+    if header_mcp_version and header_mcp_version != MCP_PROTOCOL_VERSION_2026:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "INVALID_PROTOCOL_VERSION", "message": f"Expected 'MCP-Protocol-Version: {MCP_PROTOCOL_VERSION_2026}'."}
+        )
+
+    # 2. Validate Mcp-Method Header Presence
+    if not header_mcp_method:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "MISSING_MCP_METHOD", "message": "Header 'Mcp-Method' is required."}
+        )
+
+    clean_method = header_mcp_method.strip()
+    if clean_method not in VALID_2026_METHODS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "INVALID_MCP_METHOD", "message": f"Method '{clean_method}' is not a valid MCP 2026-07-28 method."}
+        )
+
+    body_method = payload.get("method")
+    if clean_method != body_method:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "MISMATCHED_MCP_METHOD", "message": f"Header Mcp-Method '{clean_method}' does not match body method '{body_method}'."}
+        )
+
+    # 3. Validate Mcp-Name when method is tools/call
+    if clean_method == "tools/call":
+        if not header_mcp_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "MISSING_MCP_NAME", "message": "Header 'Mcp-Name' is required for method 'tools/call'."}
+            )
+
+        clean_name = header_mcp_name.strip()
+        if clean_name not in REGISTERED_TOOL_NAMES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "INVALID_MCP_NAME", "message": f"Tool '{clean_name}' is not registered."}
+            )
+
+        body_tool_name = payload.get("params", {}).get("name")
+        if clean_name != body_tool_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "MISMATCHED_MCP_NAME", "message": f"Header Mcp-Name '{clean_name}' does not match body params.name '{body_tool_name}'."}
+            )
+
 async def process_mcp_2026_stateless(payload: dict) -> tuple[dict, int]:
-    """
-    Pure Stateless MCP 2026-07-28 Specification Handler.
-    Zero sessions, zero state, zero initialize required.
-    Methods: server/discover, tools/list, tools/call.
-    """
     if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0":
         return make_jsonrpc_error(payload.get("id") if isinstance(payload, dict) else None, INVALID_REQUEST, "Invalid JSON-RPC 2.0 request."), status.HTTP_400_BAD_REQUEST
 
@@ -68,10 +122,13 @@ async def process_mcp_2026_stateless(payload: dict) -> tuple[dict, int]:
         }
         return make_jsonrpc_response(request_id, res_data), status.HTTP_200_OK
 
-    # 2. tools/list Discovery
+    # 2. tools/list Discovery with Spec 2026-07-28 Cache Metadata
     elif method == "tools/list":
         res_data = {
-            "tools": MCP_TOOL_DEFINITIONS
+            "tools": MCP_TOOL_DEFINITIONS,
+            "cacheScope": "global",
+            "ttlMs": 3600000,
+            "listChanged": False
         }
         return make_jsonrpc_response(request_id, res_data), status.HTTP_200_OK
 
@@ -117,15 +174,11 @@ async def process_mcp_2026_stateless(payload: dict) -> tuple[dict, int]:
             }
             return make_jsonrpc_response(request_id, error_content), status.HTTP_200_OK
 
-    # 4. Method Not Found
     else:
         return make_jsonrpc_error(request_id, METHOD_NOT_FOUND, f"Method '{method}' not supported in MCP 2026-07-28 stateless core."), status.HTTP_404_NOT_FOUND
 
 async def process_mcp_2025_legacy_stateful(payload: dict, session_id: Optional[str] = None) -> tuple[dict, int, str]:
-    """
-    Legacy 2025-11-25 Stateful MCP Protocol Handler.
-    Supports initialize, notifications/initialized, and Mcp-Session-Id tracking.
-    """
+    """ UNCHANGED LEGACY HANDLER """
     if session_id and session_id in legacy_sessions:
         current_sess_id = session_id
     else:
