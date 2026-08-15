@@ -1,5 +1,7 @@
 """
-Main FastAPI Application Gateway & MCP Protocol 2026-07-28 Streamable HTTP Handler
+Main FastAPI Application Gateway & MCP Protocol Handler
+- /v1/mcp: Official Pure Stateless MCP 2026-07-28 Protocol (server/discover, tools/list, tools/call) - NO Session Headers.
+- /v1/mcp/legacy: Legacy 2025-11-25 Stateful Protocol (initialize, Mcp-Session-Id).
 """
 import time
 import json
@@ -10,26 +12,65 @@ from config import settings
 from security import verify_api_key, check_rate_limit
 from logging_obs import logger, metrics
 from mcp_tools import MCP_TOOL_DEFINITIONS, handle_mcp_tool_call, WebSearchInput, FetchUrlInput, ExtractMarkdownInput
-from mcp_protocol import process_mcp_jsonrpc_request, MCP_PROTOCOL_VERSION
+from mcp_protocol import (
+    process_mcp_2026_stateless,
+    process_mcp_2025_legacy_stateful,
+    MCP_PROTOCOL_VERSION_2026,
+    MCP_PROTOCOL_VERSION_LEGACY
+)
 from web_engine import execute_web_search, execute_fetch_url, execute_extract_markdown
 
 app = FastAPI(
     title="MCP Web Engine & Search Gateway",
-    description="High-performance, SSRF-hardened MCP Server (Spec 2026-07-28 Streamable HTTP & JSON-RPC 2.0)",
+    description="High-performance, SSRF-hardened MCP Server (Spec 2026-07-28 Pure Stateless Core & Legacy 2025-11-25)",
     version="1.0.0"
 )
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "environment": settings.ENV, "searxng_url": settings.SEARXNG_URL, "mcp_version": MCP_PROTOCOL_VERSION}
+    return {
+        "status": "ok",
+        "environment": settings.ENV,
+        "searxng_url": settings.SEARXNG_URL,
+        "mcp_version": MCP_PROTOCOL_VERSION_2026
+    }
 
 @app.get("/v1/metrics")
 async def get_metrics(api_key: str = Depends(verify_api_key)):
     return metrics.get_summary()
 
-# Official MCP 2026-07-28 Streamable HTTP Endpoint (JSON-RPC 2.0 POST)
+# OFFICIAL MCP 2026-07-28 STATELESS CORE ENDPOINT (POST /v1/mcp)
 @app.post("/v1/mcp")
-async def mcp_streamable_http_endpoint(
+async def mcp_2026_stateless_endpoint(
+    request: Request,
+    api_key: str = Depends(verify_api_key)
+):
+    check_rate_limit(api_key)
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "INVALID_JSON", "message": "Request body must be valid JSON-RPC 2.0."}
+        )
+
+    res_body, http_status = await process_mcp_2026_stateless(payload)
+    
+    # Pure 2026-07-28 Stateless Headers (STRICTLY NO Mcp-Session-Id!)
+    headers = {
+        "MCP-Protocol-Version": MCP_PROTOCOL_VERSION_2026,
+        "Content-Type": "application/json"
+    }
+    
+    return Response(
+        content=json.dumps(res_body, ensure_ascii=False) if res_body else "",
+        status_code=http_status,
+        headers=headers
+    )
+
+# LEGACY 2025-11-25 STATEFUL ENDPOINT (POST /v1/mcp/legacy)
+@app.post("/v1/mcp/legacy")
+async def mcp_2025_legacy_endpoint(
     request: Request,
     api_key: str = Depends(verify_api_key),
     mcp_session_id: Optional[str] = Header(None, alias="Mcp-Session-Id")
@@ -43,11 +84,10 @@ async def mcp_streamable_http_endpoint(
             detail={"error": "INVALID_JSON", "message": "Request body must be valid JSON-RPC 2.0."}
         )
 
-    res_body, http_status, out_session_id = await process_mcp_jsonrpc_request(payload, mcp_session_id)
+    res_body, http_status, out_session_id = await process_mcp_2025_legacy_stateful(payload, mcp_session_id)
     
     headers = {
-        "Mcp-Version": MCP_PROTOCOL_VERSION,
-        "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
+        "MCP-Protocol-Version": MCP_PROTOCOL_VERSION_LEGACY,
         "Mcp-Session-Id": out_session_id,
         "Content-Type": "application/json"
     }
@@ -58,7 +98,7 @@ async def mcp_streamable_http_endpoint(
         headers=headers
     )
 
-# Official MCP 2026-07-28 SSE Stream Endpoint (GET)
+# SSE Event Endpoint
 @app.get("/v1/mcp")
 async def mcp_sse_endpoint(
     request: Request,

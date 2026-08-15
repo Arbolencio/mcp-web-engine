@@ -1,6 +1,7 @@
 """
-MCP Protocol 2026-07-28 Streamable HTTP / JSON-RPC 2.0 Handler Module
-Implements standard JSON-RPC 2.0 message handling, session tracking (Mcp-Session-Id), and lifecycle methods.
+MCP Protocol Handler:
+- 2026-07-28: Pure Stateless Core (server/discover, tools/list, tools/call) - NO sessions / NO initialize.
+- 2025-11-25: Legacy Stateful Protocol (initialize, notifications/initialized, Mcp-Session-Id).
 """
 import json
 import time
@@ -10,12 +11,13 @@ from fastapi import status
 from mcp_tools import MCP_TOOL_DEFINITIONS, handle_mcp_tool_call
 from logging_obs import logger, metrics
 
-MCP_PROTOCOL_VERSION = "2026-07-28"
+MCP_PROTOCOL_VERSION_2026 = "2026-07-28"
+MCP_PROTOCOL_VERSION_LEGACY = "2025-11-25"
 
-# Active Sessions Store
-active_mcp_sessions = {}
+# Legacy 2025-11-25 Sessions Store ONLY
+legacy_sessions = {}
 
-# Standard JSON-RPC 2.0 Error Codes
+# JSON-RPC 2.0 Error Codes
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601
@@ -39,66 +41,47 @@ def make_jsonrpc_error(request_id, code, message, data=None):
         "error": err_obj
     }
 
-def get_or_create_session_id(input_session_id: Optional[str] = None) -> str:
-    if input_session_id and input_session_id in active_mcp_sessions:
-        active_mcp_sessions[input_session_id]["last_seen"] = time.time()
-        return input_session_id
-    
-    new_id = f"mcp_sess_{secrets.token_hex(12)}"
-    active_mcp_sessions[new_id] = {
-        "created_at": time.time(),
-        "last_seen": time.time(),
-        "initialized": False
-    }
-    return new_id
-
-async def process_mcp_jsonrpc_request(payload: dict, session_id: Optional[str] = None) -> tuple[dict, int, str]:
+async def process_mcp_2026_stateless(payload: dict) -> tuple[dict, int]:
     """
-    Processes an incoming JSON-RPC 2.0 MCP request according to specification 2026-07-28.
-    Returns (response_dict, http_status_code, session_id).
+    Pure Stateless MCP 2026-07-28 Specification Handler.
+    Zero sessions, zero state, zero initialize required.
+    Methods: server/discover, tools/list, tools/call.
     """
-    current_session_id = get_or_create_session_id(session_id)
-
     if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0":
-        return make_jsonrpc_error(payload.get("id") if isinstance(payload, dict) else None, INVALID_REQUEST, "Invalid JSON-RPC 2.0 request."), status.HTTP_400_BAD_REQUEST, current_session_id
+        return make_jsonrpc_error(payload.get("id") if isinstance(payload, dict) else None, INVALID_REQUEST, "Invalid JSON-RPC 2.0 request."), status.HTTP_400_BAD_REQUEST
 
     request_id = payload.get("id")
     method = payload.get("method")
     params = payload.get("params", {})
 
-    # 1. initialize Handshake
-    if method == "initialize":
-        active_mcp_sessions[current_session_id]["initialized"] = True
+    # 1. server/discover Metadata Discovery
+    if method == "server/discover":
         res_data = {
-            "protocolVersion": MCP_PROTOCOL_VERSION,
-            "capabilities": {
-                "tools": {"listChanged": False}
-            },
-            "serverInfo": {
+            "protocolVersion": MCP_PROTOCOL_VERSION_2026,
+            "server": {
                 "name": "mcp-web-engine",
                 "version": "1.0.0"
+            },
+            "capabilities": {
+                "tools": True
             }
         }
-        return make_jsonrpc_response(request_id, res_data), status.HTTP_200_OK, current_session_id
+        return make_jsonrpc_response(request_id, res_data), status.HTTP_200_OK
 
-    # 2. notifications/initialized (Stateless notification)
-    elif method == "notifications/initialized":
-        return {}, status.HTTP_202_ACCEPTED, current_session_id
-
-    # 3. tools/list Discovery
+    # 2. tools/list Discovery
     elif method == "tools/list":
         res_data = {
             "tools": MCP_TOOL_DEFINITIONS
         }
-        return make_jsonrpc_response(request_id, res_data), status.HTTP_200_OK, current_session_id
+        return make_jsonrpc_response(request_id, res_data), status.HTTP_200_OK
 
-    # 4. tools/call Execution
+    # 3. tools/call Execution
     elif method == "tools/call":
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
 
         if not tool_name:
-            return make_jsonrpc_error(request_id, INVALID_PARAMS, "Missing tool 'name' in params."), status.HTTP_400_BAD_REQUEST, current_session_id
+            return make_jsonrpc_error(request_id, INVALID_PARAMS, "Missing tool 'name' in params."), status.HTTP_400_BAD_REQUEST
 
         start_t = time.time()
         try:
@@ -116,7 +99,7 @@ async def process_mcp_jsonrpc_request(payload: dict, session_id: Optional[str] =
                 ],
                 "isError": False
             }
-            return make_jsonrpc_response(request_id, mcp_result), status.HTTP_200_OK, current_session_id
+            return make_jsonrpc_response(request_id, mcp_result), status.HTTP_200_OK
 
         except Exception as e:
             lat = round((time.time() - start_t) * 1000, 2)
@@ -132,8 +115,53 @@ async def process_mcp_jsonrpc_request(payload: dict, session_id: Optional[str] =
                 ],
                 "isError": True
             }
-            return make_jsonrpc_response(request_id, error_content), status.HTTP_200_OK, current_session_id
+            return make_jsonrpc_response(request_id, error_content), status.HTTP_200_OK
 
-    # 5. Method Not Found
+    # 4. Method Not Found
     else:
-        return make_jsonrpc_error(request_id, METHOD_NOT_FOUND, f"Method '{method}' not found or unsupported."), status.HTTP_404_NOT_FOUND, current_session_id
+        return make_jsonrpc_error(request_id, METHOD_NOT_FOUND, f"Method '{method}' not supported in MCP 2026-07-28 stateless core."), status.HTTP_404_NOT_FOUND
+
+async def process_mcp_2025_legacy_stateful(payload: dict, session_id: Optional[str] = None) -> tuple[dict, int, str]:
+    """
+    Legacy 2025-11-25 Stateful MCP Protocol Handler.
+    Supports initialize, notifications/initialized, and Mcp-Session-Id tracking.
+    """
+    if session_id and session_id in legacy_sessions:
+        current_sess_id = session_id
+    else:
+        current_sess_id = f"mcp_sess_legacy_{secrets.token_hex(8)}"
+        legacy_sessions[current_sess_id] = {"created": time.time()}
+
+    if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0":
+        return make_jsonrpc_error(payload.get("id") if isinstance(payload, dict) else None, INVALID_REQUEST, "Invalid JSON-RPC 2.0 request."), status.HTTP_400_BAD_REQUEST, current_sess_id
+
+    request_id = payload.get("id")
+    method = payload.get("method")
+    params = payload.get("params", {})
+
+    if method == "initialize":
+        res_data = {
+            "protocolVersion": MCP_PROTOCOL_VERSION_LEGACY,
+            "capabilities": {"tools": {"listChanged": False}},
+            "serverInfo": {"name": "mcp-web-engine-legacy", "version": "1.0.0"}
+        }
+        return make_jsonrpc_response(request_id, res_data), status.HTTP_200_OK, current_sess_id
+
+    elif method == "notifications/initialized":
+        return {}, status.HTTP_202_ACCEPTED, current_sess_id
+
+    elif method == "tools/list":
+        return make_jsonrpc_response(request_id, {"tools": MCP_TOOL_DEFINITIONS}), status.HTTP_200_OK, current_sess_id
+
+    elif method == "tools/call":
+        tool_name = params.get("name")
+        arguments = params.get("arguments", {})
+        try:
+            raw_result = await handle_mcp_tool_call(tool_name, arguments)
+            mcp_result = {"content": [{"type": "text", "text": json.dumps(raw_result)}], "isError": False}
+            return make_jsonrpc_response(request_id, mcp_result), status.HTTP_200_OK, current_sess_id
+        except Exception as e:
+            return make_jsonrpc_response(request_id, {"content": [{"type": "text", "text": str(e)}], "isError": True}), status.HTTP_200_OK, current_sess_id
+
+    else:
+        return make_jsonrpc_error(request_id, METHOD_NOT_FOUND, f"Method '{method}' not found."), status.HTTP_404_NOT_FOUND, current_sess_id
