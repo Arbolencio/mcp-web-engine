@@ -3,7 +3,8 @@ Main FastAPI Application Gateway & MCP Protocol 2026-07-28 Streamable HTTP Handl
 """
 import time
 import json
-from fastapi import FastAPI, Depends, HTTPException, status, Response, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Response, Request, Header
+from typing import Optional
 from sse_starlette.sse import EventSourceResponse
 from config import settings
 from security import verify_api_key, check_rate_limit
@@ -30,7 +31,8 @@ async def get_metrics(api_key: str = Depends(verify_api_key)):
 @app.post("/v1/mcp")
 async def mcp_streamable_http_endpoint(
     request: Request,
-    api_key: str = Depends(verify_api_key)
+    api_key: str = Depends(verify_api_key),
+    mcp_session_id: Optional[str] = Header(None, alias="Mcp-Session-Id")
 ):
     check_rate_limit(api_key)
     try:
@@ -41,11 +43,12 @@ async def mcp_streamable_http_endpoint(
             detail={"error": "INVALID_JSON", "message": "Request body must be valid JSON-RPC 2.0."}
         )
 
-    res_body, http_status = await process_mcp_jsonrpc_request(payload)
+    res_body, http_status, out_session_id = await process_mcp_jsonrpc_request(payload, mcp_session_id)
     
     headers = {
         "Mcp-Version": MCP_PROTOCOL_VERSION,
         "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
+        "Mcp-Session-Id": out_session_id,
         "Content-Type": "application/json"
     }
     

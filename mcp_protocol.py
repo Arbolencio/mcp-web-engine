@@ -1,14 +1,19 @@
 """
 MCP Protocol 2026-07-28 Streamable HTTP / JSON-RPC 2.0 Handler Module
-Implements standard JSON-RPC 2.0 message handling for tools/list, tools/call, and initialize.
+Implements standard JSON-RPC 2.0 message handling, session tracking (Mcp-Session-Id), and lifecycle methods.
 """
 import json
 import time
-from fastapi import Response, status
+import secrets
+from typing import Optional
+from fastapi import status
 from mcp_tools import MCP_TOOL_DEFINITIONS, handle_mcp_tool_call
 from logging_obs import logger, metrics
 
 MCP_PROTOCOL_VERSION = "2026-07-28"
+
+# Active Sessions Store
+active_mcp_sessions = {}
 
 # Standard JSON-RPC 2.0 Error Codes
 PARSE_ERROR = -32700
@@ -34,20 +39,36 @@ def make_jsonrpc_error(request_id, code, message, data=None):
         "error": err_obj
     }
 
-async def process_mcp_jsonrpc_request(payload: dict) -> tuple[dict, int]:
+def get_or_create_session_id(input_session_id: Optional[str] = None) -> str:
+    if input_session_id and input_session_id in active_mcp_sessions:
+        active_mcp_sessions[input_session_id]["last_seen"] = time.time()
+        return input_session_id
+    
+    new_id = f"mcp_sess_{secrets.token_hex(12)}"
+    active_mcp_sessions[new_id] = {
+        "created_at": time.time(),
+        "last_seen": time.time(),
+        "initialized": False
+    }
+    return new_id
+
+async def process_mcp_jsonrpc_request(payload: dict, session_id: Optional[str] = None) -> tuple[dict, int, str]:
     """
     Processes an incoming JSON-RPC 2.0 MCP request according to specification 2026-07-28.
-    Returns (response_dict, http_status_code).
+    Returns (response_dict, http_status_code, session_id).
     """
+    current_session_id = get_or_create_session_id(session_id)
+
     if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0":
-        return make_jsonrpc_error(payload.get("id"), INVALID_REQUEST, "Invalid JSON-RPC 2.0 request."), status.HTTP_400_BAD_REQUEST
+        return make_jsonrpc_error(payload.get("id") if isinstance(payload, dict) else None, INVALID_REQUEST, "Invalid JSON-RPC 2.0 request."), status.HTTP_400_BAD_REQUEST, current_session_id
 
     request_id = payload.get("id")
     method = payload.get("method")
     params = payload.get("params", {})
 
-    # 1. initialize Handshake (Stateless compatible)
+    # 1. initialize Handshake
     if method == "initialize":
+        active_mcp_sessions[current_session_id]["initialized"] = True
         res_data = {
             "protocolVersion": MCP_PROTOCOL_VERSION,
             "capabilities": {
@@ -58,18 +79,18 @@ async def process_mcp_jsonrpc_request(payload: dict) -> tuple[dict, int]:
                 "version": "1.0.0"
             }
         }
-        return make_jsonrpc_response(request_id, res_data), status.HTTP_200_OK
+        return make_jsonrpc_response(request_id, res_data), status.HTTP_200_OK, current_session_id
 
     # 2. notifications/initialized (Stateless notification)
     elif method == "notifications/initialized":
-        return {}, status.HTTP_202_ACCEPTED
+        return {}, status.HTTP_202_ACCEPTED, current_session_id
 
     # 3. tools/list Discovery
     elif method == "tools/list":
         res_data = {
             "tools": MCP_TOOL_DEFINITIONS
         }
-        return make_jsonrpc_response(request_id, res_data), status.HTTP_200_OK
+        return make_jsonrpc_response(request_id, res_data), status.HTTP_200_OK, current_session_id
 
     # 4. tools/call Execution
     elif method == "tools/call":
@@ -77,7 +98,7 @@ async def process_mcp_jsonrpc_request(payload: dict) -> tuple[dict, int]:
         arguments = params.get("arguments", {})
 
         if not tool_name:
-            return make_jsonrpc_error(request_id, INVALID_PARAMS, "Missing tool 'name' in params."), status.HTTP_400_BAD_REQUEST
+            return make_jsonrpc_error(request_id, INVALID_PARAMS, "Missing tool 'name' in params."), status.HTTP_400_BAD_REQUEST, current_session_id
 
         start_t = time.time()
         try:
@@ -85,7 +106,6 @@ async def process_mcp_jsonrpc_request(payload: dict) -> tuple[dict, int]:
             lat = round((time.time() - start_t) * 1000, 2)
             metrics.record(tool_name, lat, success=True)
 
-            # Format result according to MCP Content Standard
             content_text = json.dumps(raw_result, indent=2, ensure_ascii=False)
             mcp_result = {
                 "content": [
@@ -96,14 +116,13 @@ async def process_mcp_jsonrpc_request(payload: dict) -> tuple[dict, int]:
                 ],
                 "isError": False
             }
-            return make_jsonrpc_response(request_id, mcp_result), status.HTTP_200_OK
+            return make_jsonrpc_response(request_id, mcp_result), status.HTTP_200_OK, current_session_id
 
         except Exception as e:
             lat = round((time.time() - start_t) * 1000, 2)
             metrics.record(tool_name, lat, success=False)
             logger.error(f"Error executing MCP tool '{tool_name}': {str(e)}")
 
-            # Standard MCP Tool Error Output
             error_content = {
                 "content": [
                     {
@@ -113,8 +132,8 @@ async def process_mcp_jsonrpc_request(payload: dict) -> tuple[dict, int]:
                 ],
                 "isError": True
             }
-            return make_jsonrpc_response(request_id, error_content), status.HTTP_200_OK
+            return make_jsonrpc_response(request_id, error_content), status.HTTP_200_OK, current_session_id
 
     # 5. Method Not Found
     else:
-        return make_jsonrpc_error(request_id, METHOD_NOT_FOUND, f"Method '{method}' not found or unsupported."), status.HTTP_404_NOT_FOUND
+        return make_jsonrpc_error(request_id, METHOD_NOT_FOUND, f"Method '{method}' not found or unsupported."), status.HTTP_404_NOT_FOUND, current_session_id
