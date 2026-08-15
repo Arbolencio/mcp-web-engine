@@ -4,10 +4,10 @@
 
 ---
 
-## 🌐 Endpoint Público de Producción HTTPS
+## 🌐 Endpoint Público de Producción HTTPS (Cloudflare Managed Tunnel)
 
-- **Endpoint MCP 2026-07-28:** `https://surveys-networking-titled-middle.trycloudflare.com/v1/mcp`
-- **Health Check:** `https://surveys-networking-titled-middle.trycloudflare.com/health`
+- **Endpoint MCP 2026-07-28:** `https://ultimate-ignored-over-light.trycloudflare.com/v1/mcp`
+- **Health Check:** `https://ultimate-ignored-over-light.trycloudflare.com/health`
 
 ---
 
@@ -23,7 +23,7 @@ Cada clave Beta cuenta con un límite de **10,000 peticiones** y una tasa máxim
 ### A. Configuración en Cursor / Windsurf / MCP Inspector (Conexión Directa HTTPS)
 1. Abre los ajustes de **MCP / Custom Tools** en tu IDE.
 2. Añade un nuevo servidor con la siguiente URL:
-   - **URL:** `https://surveys-networking-titled-middle.trycloudflare.com/v1/mcp`
+   - **URL:** `https://ultimate-ignored-over-light.trycloudflare.com/v1/mcp`
 3. Añade la cabecera HTTP de autenticación:
    - **Header Name:** `Authorization`
    - **Header Value:** `Bearer sk_mcp_beta_TU_CLAVE_AQUÍ`
@@ -41,7 +41,7 @@ Abre tu archivo `claude_desktop_config.json` y añade:
       "args": [
         "-y",
         "mcp-remote",
-        "https://surveys-networking-titled-middle.trycloudflare.com/v1/mcp",
+        "https://ultimate-ignored-over-light.trycloudflare.com/v1/mcp",
         "--header",
         "Authorization: Bearer sk_mcp_beta_TU_CLAVE_AQUÍ"
       ]

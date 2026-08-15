@@ -4,10 +4,10 @@
 
 ---
 
-## 🌐 Public Production HTTPS Endpoint
+## 🌐 Public Production HTTPS Endpoint (Cloudflare Managed Tunnel)
 
-- **Public MCP 2026-07-28 Endpoint:** `https://surveys-networking-titled-middle.trycloudflare.com/v1/mcp`
-- **Health Check:** `https://surveys-networking-titled-middle.trycloudflare.com/health`
+- **Public MCP 2026-07-28 Endpoint:** `https://ultimate-ignored-over-light.trycloudflare.com/v1/mcp`
+- **Health Check:** `https://ultimate-ignored-over-light.trycloudflare.com/health`
 
 ---
 
@@ -32,7 +32,7 @@
         (HTTPS Header: Authorization: Bearer sk_mcp_...)
         (HTTPS Header: MCP-Protocol-Version: 2026-07-28)
                          ▼
-        [ Cloudflare HTTPS Secure Tunnel ]
+        [ Cloudflare Managed HTTPS Tunnel ]
                          │
                          ▼
         [ FastAPI Gateway (Port 5050) ]
@@ -60,7 +60,7 @@ cp .env.example .env
 docker compose up -d
 
 # 4. Verify Health Check
-curl -s https://surveys-networking-titled-middle.trycloudflare.com/health
+curl -s https://ultimate-ignored-over-light.trycloudflare.com/health
 # {"status":"ok","environment":"production","searxng_url":"http://host.docker.internal:8082/search","mcp_version":"2026-07-28"}
 ```
 
@@ -69,7 +69,7 @@ curl -s https://surveys-networking-titled-middle.trycloudflare.com/health
 ## 🔌 Connecting from MCP Clients (Cursor, Windsurf, Inspector, Claude Desktop)
 
 ### 1. Cursor / Windsurf / MCP Inspector (Direct HTTPS):
-- **Server Endpoint:** `https://surveys-networking-titled-middle.trycloudflare.com/v1/mcp`
+- **Server Endpoint:** `https://ultimate-ignored-over-light.trycloudflare.com/v1/mcp`
 - **Headers:**
   - `Authorization: Bearer YOUR_BETA_KEY_HERE`
   - `MCP-Protocol-Version: 2026-07-28`
@@ -83,7 +83,7 @@ curl -s https://surveys-networking-titled-middle.trycloudflare.com/health
       "args": [
         "-y",
         "mcp-remote",
-        "https://surveys-networking-titled-middle.trycloudflare.com/v1/mcp",
+        "https://ultimate-ignored-over-light.trycloudflare.com/v1/mcp",
         "--header",
         "Authorization: Bearer YOUR_BETA_KEY_HERE"
       ]
