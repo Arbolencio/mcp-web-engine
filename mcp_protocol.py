@@ -1,5 +1,5 @@
 """
-MCP Protocol Handler (Spec 2026-07-28 Pure Stateless Core with Header Validation & Cache Metadata)
+MCP Protocol Handler (Spec 2026-07-28 Pure Stateless Core with Header Validation & Per-User Telemetry)
 """
 import json
 import time
@@ -47,17 +47,12 @@ def validate_2026_mcp_headers(
     header_mcp_name: Optional[str],
     payload: dict
 ):
-    """
-    Validates MCP 2026-07-28 headers and ensures strict correspondence with JSON-RPC body.
-    """
-    # 1. Validate MCP-Protocol-Version
     if header_mcp_version and header_mcp_version != MCP_PROTOCOL_VERSION_2026:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": "INVALID_PROTOCOL_VERSION", "message": f"Expected 'MCP-Protocol-Version: {MCP_PROTOCOL_VERSION_2026}'."}
         )
 
-    # 2. Validate Mcp-Method Header Presence
     if not header_mcp_method:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -78,7 +73,6 @@ def validate_2026_mcp_headers(
             detail={"error": "MISMATCHED_MCP_METHOD", "message": f"Header Mcp-Method '{clean_method}' does not match body method '{body_method}'."}
         )
 
-    # 3. Validate Mcp-Name when method is tools/call
     if clean_method == "tools/call":
         if not header_mcp_name:
             raise HTTPException(
@@ -100,7 +94,7 @@ def validate_2026_mcp_headers(
                 detail={"error": "MISMATCHED_MCP_NAME", "message": f"Header Mcp-Name '{clean_name}' does not match body params.name '{body_tool_name}'."}
             )
 
-async def process_mcp_2026_stateless(payload: dict) -> tuple[dict, int]:
+async def process_mcp_2026_stateless(payload: dict, api_key: Optional[str] = None) -> tuple[dict, int]:
     if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0":
         return make_jsonrpc_error(payload.get("id") if isinstance(payload, dict) else None, INVALID_REQUEST, "Invalid JSON-RPC 2.0 request."), status.HTTP_400_BAD_REQUEST
 
@@ -108,7 +102,6 @@ async def process_mcp_2026_stateless(payload: dict) -> tuple[dict, int]:
     method = payload.get("method")
     params = payload.get("params", {})
 
-    # 1. server/discover Metadata Discovery
     if method == "server/discover":
         res_data = {
             "protocolVersion": MCP_PROTOCOL_VERSION_2026,
@@ -122,7 +115,6 @@ async def process_mcp_2026_stateless(payload: dict) -> tuple[dict, int]:
         }
         return make_jsonrpc_response(request_id, res_data), status.HTTP_200_OK
 
-    # 2. tools/list Discovery with Spec 2026-07-28 Cache Metadata
     elif method == "tools/list":
         res_data = {
             "tools": MCP_TOOL_DEFINITIONS,
@@ -132,7 +124,6 @@ async def process_mcp_2026_stateless(payload: dict) -> tuple[dict, int]:
         }
         return make_jsonrpc_response(request_id, res_data), status.HTTP_200_OK
 
-    # 3. tools/call Execution
     elif method == "tools/call":
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
@@ -144,7 +135,7 @@ async def process_mcp_2026_stateless(payload: dict) -> tuple[dict, int]:
         try:
             raw_result = await handle_mcp_tool_call(tool_name, arguments)
             lat = round((time.time() - start_t) * 1000, 2)
-            metrics.record(tool_name, lat, success=True)
+            metrics.record(tool_name, lat, success=True, api_key=api_key)
 
             content_text = json.dumps(raw_result, indent=2, ensure_ascii=False)
             mcp_result = {
@@ -160,7 +151,7 @@ async def process_mcp_2026_stateless(payload: dict) -> tuple[dict, int]:
 
         except Exception as e:
             lat = round((time.time() - start_t) * 1000, 2)
-            metrics.record(tool_name, lat, success=False)
+            metrics.record(tool_name, lat, success=False, api_key=api_key)
             logger.error(f"Error executing MCP tool '{tool_name}': {str(e)}")
 
             error_content = {
@@ -178,7 +169,6 @@ async def process_mcp_2026_stateless(payload: dict) -> tuple[dict, int]:
         return make_jsonrpc_error(request_id, METHOD_NOT_FOUND, f"Method '{method}' not supported in MCP 2026-07-28 stateless core."), status.HTTP_404_NOT_FOUND
 
 async def process_mcp_2025_legacy_stateful(payload: dict, session_id: Optional[str] = None) -> tuple[dict, int, str]:
-    """ UNCHANGED LEGACY HANDLER """
     if session_id and session_id in legacy_sessions:
         current_sess_id = session_id
     else:

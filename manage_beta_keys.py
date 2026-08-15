@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Beta Keys Management CLI for MCP Web Engine
-Genera, lista y revoca claves Beta de acceso (sk_mcp_beta_...) almacenadas en beta_keys.json.
+Beta Keys & Telemetry Management CLI for MCP Web Engine
+Genera 20 keys independientes (Beta_001 .. Beta_020), lista y gestiona telemetría por usuario en beta_keys.json.
 """
 import sys
 import os
@@ -25,71 +25,99 @@ def save_keys(keys):
     with open(KEYS_FILE, "w", encoding="utf-8") as f:
         json.dump(keys, f, indent=2)
 
-def generate_keys(count=15, name_prefix="beta_user"):
-    keys = load_keys()
-    generated = []
+def generate_20_beta_keys():
+    keys = {}
+    generated_summary = []
 
-    for i in range(count):
-        raw = secrets.token_hex(16)
-        key_str = f"sk_mcp_beta_{raw}"
+    for i in range(1, 21):
+        beta_id = f"Beta_{i:03d}"
+        raw_token = secrets.token_hex(16)
+        key_str = f"sk_mcp_beta_{raw_token}"
+
         keys[key_str] = {
-            "name": f"{name_prefix}_{i+1:02d}",
-            "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "id": beta_id,
+            "key": key_str,
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "limit": 10000,
+            "rate_limit": 120,
             "status": "active",
-            "usage_count": 0
+            "telemetry": {
+                "requests": 0,
+                "web_search": 0,
+                "fetch_url": 0,
+                "extract_markdown": 0,
+                "errors": 0,
+                "avg_latency_ms": 0.0,
+                "last_seen": None
+            }
         }
-        generated.append(key_str)
+        generated_summary.append((beta_id, key_str))
 
     save_keys(keys)
-    print(f"✅ Generadas {len(generated)} Beta Keys activas en: {KEYS_FILE}")
-    for k in generated:
-        print(f"  - {k} ({keys[k]['name']})")
-    return generated
+    print(f"✅ Generadas 20 Beta Keys independientes (Beta_001 .. Beta_020) en: {KEYS_FILE}")
+    for beta_id, key_str in generated_summary:
+        print(f"  - {beta_id:10s}: {key_str}")
+    return keys
 
-def list_keys():
+def list_beta_telemetry():
     keys = load_keys()
     if not keys:
-        print("ℹ️ No hay Beta Keys registradas aún.")
+        print("ℹ️ No hay Beta Keys registradas.")
         return
 
-    print(f"📋 LISTA DE BETA KEYS ({len(keys)} Total):")
-    print("-" * 65)
-    print(f"{'Clave API':35s} | {'Nombre':15s} | {'Estado':8s}")
-    print("-" * 65)
+    print("📊 DASHBOARD DE TELEMETRÍA POR USUARIO BETA:")
+    print("=" * 85)
+    print(f"{'ID Beta':10s} | {'Estado':8s} | {'Reqs':6s} | {'Search':6s} | {'Fetch':6s} | {'Extract':8s} | {'Errors':6s} | {'Last Seen'}")
+    print("=" * 85)
+    
+    total_reqs = 0
+    total_errs = 0
+    
     for k, info in keys.items():
-        print(f"{k:35s} | {info['name']:15s} | {info['status']:8s}")
-    print("-" * 65)
+        t = info.get("telemetry", {})
+        reqs = t.get("requests", 0)
+        errs = t.get("errors", 0)
+        total_reqs += reqs
+        total_errs += errs
+        
+        last_seen = t.get("last_seen") or "Nunca"
+        print(f"{info['id']:10s} | {info['status']:8s} | {reqs:6d} | {t.get('web_search', 0):6d} | {t.get('fetch_url', 0):6d} | {t.get('extract_markdown', 0):8d} | {errs:6d} | {last_seen}")
 
-def revoke_key(key_str):
+    print("=" * 85)
+    print(f"📈 TOTALES: {len(keys)} Usuarios Beta | {total_reqs} Peticiones Totales | {total_errs} Errores Totales")
+
+def revoke_key_by_id(beta_id):
     keys = load_keys()
-    if key_str in keys:
-        keys[key_str]["status"] = "revoked"
+    found = False
+    for k, info in keys.items():
+        if info.get("id") == beta_id or k == beta_id:
+            info["status"] = "revoked"
+            found = True
+            print(f"🔴 Beta Key '{beta_id}' revocada con éxito.")
+            break
+    if found:
         save_keys(keys)
-        print(f"🔴 Clave '{key_str}' revocada con éxito.")
     else:
-        print(f"❌ Clave '{key_str}' no encontrada.")
+        print(f"❌ Beta Key '{beta_id}' no encontrada.")
 
 def main():
-    parser = argparse.ArgumentParser(description="Beta Keys Manager CLI")
+    parser = argparse.ArgumentParser(description="Beta Keys & Telemetry Manager")
     subparsers = parser.add_subparsers(dest="command")
 
-    gen_parser = subparsers.add_parser("generate", help="Genera nuevas Beta Keys")
-    gen_parser.add_argument("--count", type=int, default=15, help="Número de claves a generar")
-    gen_parser.add_argument("--prefix", type=str, default="beta_user", help="Prefijo para los nombres de usuario")
-
-    list_parser = subparsers.add_parser("list", help="Lista todas las Beta Keys")
-
-    rev_parser = subparsers.add_parser("revoke", help="Revoca una Beta Key")
-    rev_parser.add_argument("--key", type=str, required=True, help="Clave a revocar")
+    subparsers.add_parser("init20", help="Genera las 20 keys de Beta_001 a Beta_020")
+    subparsers.add_parser("telemetry", help="Muestra la telemetría por usuario beta")
+    
+    rev_parser = subparsers.add_parser("revoke", help="Revoca una beta key por ID o token")
+    rev_parser.add_argument("--id", type=str, required=True, help="ID Beta (ej: Beta_001)")
 
     args = parser.parse_args()
 
-    if args.command == "generate":
-        generate_keys(args.count, args.prefix)
-    elif args.command == "list":
-        list_keys()
+    if args.command == "init20":
+        generate_20_beta_keys()
+    elif args.command == "telemetry":
+        list_beta_telemetry()
     elif args.command == "revoke":
-        revoke_key(args.key)
+        revoke_key_by_id(args.id)
     else:
         parser.print_help()
 

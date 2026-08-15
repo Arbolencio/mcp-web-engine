@@ -3,6 +3,7 @@ Main FastAPI Application Gateway & MCP Protocol Handler
 """
 import time
 import json
+import os
 from fastapi import FastAPI, Depends, HTTPException, status, Response, Request, Header
 from typing import Optional
 from sse_starlette.sse import EventSourceResponse
@@ -18,6 +19,8 @@ from mcp_protocol import (
     MCP_PROTOCOL_VERSION_LEGACY
 )
 from web_engine import execute_web_search, execute_fetch_url, execute_extract_markdown
+
+BETA_KEYS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beta_keys.json")
 
 app = FastAPI(
     title="MCP Web Engine & Search Gateway",
@@ -38,6 +41,28 @@ async def health_check():
 async def get_metrics(api_key: str = Depends(verify_api_key)):
     return metrics.get_summary()
 
+@app.get("/v1/beta/telemetry")
+async def get_beta_telemetry(api_key: str = Depends(verify_api_key)):
+    if not os.path.exists(BETA_KEYS_FILE):
+        return {"users_count": 0, "telemetry": {}}
+    try:
+        with open(BETA_KEYS_FILE, "r", encoding="utf-8") as f:
+            keys = json.load(f)
+        
+        # Redact raw key strings, expose only public beta user telemetry
+        summary = {}
+        for k, v in keys.items():
+            beta_id = v.get("id", "Unknown")
+            summary[beta_id] = {
+                "id": beta_id,
+                "status": v.get("status"),
+                "limit": v.get("limit"),
+                "telemetry": v.get("telemetry", {})
+            }
+        return {"users_count": len(summary), "telemetry": summary}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # OFFICIAL MCP 2026-07-28 STATELESS CORE ENDPOINT (POST /v1/mcp)
 @app.post("/v1/mcp")
 async def mcp_2026_stateless_endpoint(
@@ -56,12 +81,10 @@ async def mcp_2026_stateless_endpoint(
             detail={"error": "INVALID_JSON", "message": "Request body must be valid JSON-RPC 2.0."}
         )
 
-    # Validate Spec 2026-07-28 Headers
     validate_2026_mcp_headers(mcp_protocol_version, mcp_method, mcp_name, payload)
 
-    res_body, http_status = await process_mcp_2026_stateless(payload)
+    res_body, http_status = await process_mcp_2026_stateless(payload, api_key=api_key)
     
-    # Pure 2026-07-28 Headers (MCP-Protocol-Version, Mcp-Method, Mcp-Name when applicable)
     headers = {
         "MCP-Protocol-Version": MCP_PROTOCOL_VERSION_2026,
         "Mcp-Method": mcp_method,
@@ -145,15 +168,15 @@ async def invoke_mcp_tool(payload: dict, api_key: str = Depends(verify_api_key))
     try:
         res = await handle_mcp_tool_call(tool_name, arguments)
         lat = round((time.time() - start_t) * 1000, 2)
-        metrics.record(tool_name, lat, success=True)
+        metrics.record(tool_name, lat, success=True, api_key=api_key)
         return {"tool": tool_name, "status": "success", "result": res}
     except HTTPException as e:
         lat = round((time.time() - start_t) * 1000, 2)
-        metrics.record(tool_name, lat, success=False)
+        metrics.record(tool_name, lat, success=False, api_key=api_key)
         raise e
     except Exception as e:
         lat = round((time.time() - start_t) * 1000, 2)
-        metrics.record(tool_name, lat, success=False)
+        metrics.record(tool_name, lat, success=False, api_key=api_key)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "TOOL_EXECUTION_ERROR", "message": str(e)}
