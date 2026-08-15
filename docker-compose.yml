@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  mcp-web-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp_web_engine
+    ports:
+      - "5050:5050"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - API_KEY=sk_mcp_dev_key_12345
+      - SEARXNG_URL=http://host.docker.internal:8082/search
+      - PORT=5050
+      - HOST=0.0.0.0
+      - RATE_LIMIT_PER_MINUTE=120
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5050/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
