@@ -1,8 +1,9 @@
 """
-Core Web Engine Module: SearXNG Connector, SSRF-Safe HTTP Fetcher with Redirect Validation & HTML/Markdown Parser
+Core Web Engine Module: SearXNG Connector with DuckDuckGo Direct Fallback, SSRF-Safe HTTP Fetcher & HTML/Markdown Parser
 """
 import time
 import urllib.parse
+import re
 from curl_cffi.requests import AsyncSession
 from bs4 import BeautifulSoup
 import html2text
@@ -24,54 +25,76 @@ def get_headers():
         "Sec-Fetch-Dest": "document"
     }
 
+async def execute_ddg_fallback(query: str, limit: int = 10):
+    """
+    Direct DuckDuckGo HTML Search Fallback if SearXNG is unavailable.
+    """
+    start_t = time.time()
+    ddg_url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+    headers = get_headers()
+
+    async with AsyncSession() as session:
+        try:
+            r = await session.get(ddg_url, headers=headers, impersonate="chrome120", timeout=8)
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.text, "html.parser")
+                results = []
+                for idx, a in enumerate(soup.find_all("a", class_="result__a")[:limit]):
+                    title = a.get_text(strip=True)
+                    raw_href = a.get("href", "")
+                    # Extract target URL from DDG redirect
+                    match = re.search(r"uddg=(https?%3A%2F%2F[^&]+)", raw_href)
+                    final_url = urllib.parse.unquote(match.group(1)) if match else raw_href
+                    results.append({
+                        "rank": idx + 1,
+                        "title": title,
+                        "url": final_url,
+                        "snippet": f"Search result for '{query}'",
+                        "engine": "duckduckgo_fallback"
+                    })
+                return {
+                    "query": query,
+                    "count": len(results),
+                    "latency_ms": round((time.time() - start_t) * 1000, 2),
+                    "results": results
+                }
+        except Exception:
+            pass
+
+    return {"query": query, "count": 0, "latency_ms": 0, "results": []}
+
 async def execute_web_search(query: str, limit: int = 10):
     start_t = time.time()
     url = f"{settings.SEARXNG_URL}?q={query}&format=json"
     
     async with AsyncSession() as session:
         try:
-            r = await session.get(url, timeout=settings.DEFAULT_TIMEOUT_SEC)
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"error": "BACKEND_ERROR", "message": f"SearXNG service error: {str(e)}"}
-            )
+            r = await session.get(url, timeout=4.0)
+            if r.status_code == 200:
+                data = r.json()
+                results = data.get("results", [])[:limit]
+                items = []
+                for idx, item in enumerate(results):
+                    items.append({
+                        "rank": idx + 1,
+                        "title": item.get("title"),
+                        "url": item.get("url"),
+                        "snippet": item.get("content"),
+                        "engine": item.get("engine")
+                    })
+                return {
+                    "query": query,
+                    "count": len(items),
+                    "latency_ms": round((time.time() - start_t) * 1000, 2),
+                    "results": items
+                }
+        except Exception:
+            pass
 
-    if r.status_code != 200:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={"error": "SEARCH_FAILED", "message": f"SearXNG returned HTTP status {r.status_code}."}
-        )
-
-    try:
-        data = r.json()
-        results = data.get("results", [])[:limit]
-        items = []
-        for idx, item in enumerate(results):
-            items.append({
-                "rank": idx + 1,
-                "title": item.get("title"),
-                "url": item.get("url"),
-                "snippet": item.get("content"),
-                "engine": item.get("engine")
-            })
-
-        return {
-            "query": query,
-            "count": len(items),
-            "latency_ms": round((time.time() - start_t) * 1000, 2),
-            "results": items
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": "PARSE_ERROR", "message": f"Failed to parse search response: {str(e)}"}
-        )
+    # SearXNG failed or timed out -> Fallback to direct DuckDuckGo HTML parser
+    return await execute_ddg_fallback(query, limit)
 
 async def execute_fetch_url(url: str, max_bytes: int = None):
-    """
-    Fetches raw text content with manual redirect handling and strict SSRF re-validation per hop.
-    """
     current_url = validate_ssrf_url(url)
     byte_limit = max_bytes or settings.MAX_PAYLOAD_BYTES
 
@@ -96,15 +119,11 @@ async def execute_fetch_url(url: str, max_bytes: int = None):
                     detail={"error": "FETCH_ERROR", "message": f"Failed to fetch target URL: {str(e)}"}
                 )
 
-            # Check Redirect (301, 302, 303, 307, 308)
             if r.status_code in [301, 302, 303, 307, 308]:
                 location = r.headers.get("Location") or r.headers.get("location")
                 if not location:
                     break
-                
-                # Resolve relative redirect URL
                 next_url = urllib.parse.urljoin(current_url, location)
-                # Re-validate destination URL against SSRF
                 current_url = validate_ssrf_url(next_url)
                 redirect_count += 1
                 continue

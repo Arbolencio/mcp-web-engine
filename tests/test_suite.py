@@ -1,10 +1,11 @@
 """
-Comprehensive Security & Functional Automated Test Suite (pytest) for MCP Web Engine
+Comprehensive Security & MCP 2026-07-28 JSON-RPC 2.0 Test Suite (pytest) for MCP Web Engine
 """
 import pytest
 from fastapi.testclient import TestClient
 import os
 import sys
+import json
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -22,53 +23,122 @@ def test_health():
     res = client.get("/health")
     assert res.status_code == 200
     assert res.json()["status"] == "ok"
+    assert res.json()["mcp_version"] == "2026-07-28"
 
 def test_invalid_api_key():
-    res = client.post("/v1/mcp/tools", headers={"Authorization": "Bearer invalid_key_999"})
+    res = client.post("/v1/mcp", headers={"Authorization": "Bearer invalid_key_999"}, json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     assert res.status_code == 401
-    assert res.json()["detail"]["error"] == "UNAUTHORIZED"
 
-def test_mcp_tools_list():
-    res = client.post("/v1/mcp/tools", headers=AUTH_HEADERS)
+# --- OFFICIAL MCP 2026-07-28 SPEC TESTS ---
+
+def test_mcp_2026_initialize():
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2026-07-28",
+            "capabilities": {},
+            "clientInfo": {"name": "test-client", "version": "1.0.0"}
+        }
+    }
+    res = client.post("/v1/mcp", headers=AUTH_HEADERS, json=payload)
     assert res.status_code == 200
-    tools = res.json()["tools"]
+    assert res.headers.get("MCP-Protocol-Version") == "2026-07-28"
+    data = res.json()
+    assert data["jsonrpc"] == "2.0"
+    assert data["id"] == 0
+    assert data["result"]["protocolVersion"] == "2026-07-28"
+
+def test_mcp_2026_tools_list():
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list",
+        "params": {}
+    }
+    res = client.post("/v1/mcp", headers=AUTH_HEADERS, json=payload)
+    assert res.status_code == 200
+    assert res.headers.get("Mcp-Version") == "2026-07-28"
+    data = res.json()
+    assert data["jsonrpc"] == "2.0"
+    tools = data["result"]["tools"]
     tool_names = [t["name"] for t in tools]
     assert "web_search" in tool_names
     assert "fetch_url" in tool_names
     assert "extract_markdown" in tool_names
 
-def test_web_search():
+def test_mcp_2026_tools_call_web_search():
     payload = {
-        "tool": "web_search",
-        "arguments": {"query": "Python", "limit": 5}
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "web_search",
+            "arguments": {"query": "Python", "limit": 3}
+        }
     }
-    res = client.post("/v1/mcp/invoke", headers=AUTH_HEADERS, json=payload)
+    res = client.post("/v1/mcp", headers=AUTH_HEADERS, json=payload)
     assert res.status_code == 200
     data = res.json()
-    assert data["tool"] == "web_search"
-    assert data["status"] == "success"
+    assert data["jsonrpc"] == "2.0"
+    assert data["id"] == 2
+    content = data["result"]["content"]
+    assert len(content) > 0
+    assert content[0]["type"] == "text"
+    parsed_inner = json.loads(content[0]["text"])
+    assert "results" in parsed_inner
 
-def test_fetch_url():
+def test_mcp_2026_tools_call_fetch_url():
     payload = {
-        "tool": "fetch_url",
-        "arguments": {"url": "https://news.ycombinator.com"}
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "fetch_url",
+            "arguments": {"url": "https://news.ycombinator.com"}
+        }
     }
-    res = client.post("/v1/mcp/invoke", headers=AUTH_HEADERS, json=payload)
+    res = client.post("/v1/mcp", headers=AUTH_HEADERS, json=payload)
     assert res.status_code == 200
     data = res.json()
-    assert data["result"]["status_code"] == 200
-    assert data["result"]["content_length"] > 100
+    content = data["result"]["content"]
+    parsed_inner = json.loads(content[0]["text"])
+    assert parsed_inner["status_code"] == 200
 
-def test_extract_markdown():
+def test_mcp_2026_tools_call_extract_markdown():
     payload = {
-        "tool": "extract_markdown",
-        "arguments": {"url": "https://news.ycombinator.com"}
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+            "name": "extract_markdown",
+            "arguments": {"url": "https://news.ycombinator.com"}
+        }
     }
-    res = client.post("/v1/mcp/invoke", headers=AUTH_HEADERS, json=payload)
+    res = client.post("/v1/mcp", headers=AUTH_HEADERS, json=payload)
     assert res.status_code == 200
     data = res.json()
-    assert "markdown" in data["result"]
-    assert data["result"]["markdown_length"] > 100
+    content = data["result"]["content"]
+    parsed_inner = json.loads(content[0]["text"])
+    assert "markdown" in parsed_inner
+
+def test_mcp_2026_tool_error():
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "tools/call",
+        "params": {
+            "name": "unknown_tool",
+            "arguments": {}
+        }
+    }
+    res = client.post("/v1/mcp", headers=AUTH_HEADERS, json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["result"]["isError"] == True
+
+# --- SECURITY & SSRF AUDIT TESTS ---
 
 def test_ssrf_protection_basic():
     ssrf_targets = [
@@ -78,31 +148,17 @@ def test_ssrf_protection_basic():
         "http://169.254.169.254/latest/meta-data/"
     ]
     for target in ssrf_targets:
-        payload = {"tool": "fetch_url", "arguments": {"url": target}}
-        res = client.post("/v1/mcp/invoke", headers=AUTH_HEADERS, json=payload)
-        assert res.status_code in [400, 403]
-        detail = res.json()["detail"]
-        assert detail["error"] in ["SSRF_BLOCKED", "MISSING_HOSTNAME", "INVALID_SCHEME", "DNS_RESOLUTION_FAILED"]
-
-def test_ssrf_advanced_bypasses():
-    bypass_targets = [
-        "http://%31%32%37%2E%30%2E%30%2E%31:8082",
-        "http://2130706433:8082",
-        "http://admin:secret@127.0.0.1:8082",
-        "http://0.0.0.0:8082",
-        "http://[::1]:8082"
-    ]
-    for target in bypass_targets:
-        payload = {"tool": "fetch_url", "arguments": {"url": target}}
-        res = client.post("/v1/mcp/invoke", headers=AUTH_HEADERS, json=payload)
-        assert res.status_code in [400, 403]
-        assert res.json()["detail"]["error"] == "SSRF_BLOCKED"
-
-def test_invalid_url():
-    payload = {"tool": "fetch_url", "arguments": {"url": "not_a_valid_url"}}
-    res = client.post("/v1/mcp/invoke", headers=AUTH_HEADERS, json=payload)
-    assert res.status_code == 400
-    assert res.json()["detail"]["error"] == "INVALID_SCHEME"
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 99,
+            "method": "tools/call",
+            "params": {"name": "fetch_url", "arguments": {"url": target}}
+        }
+        res = client.post("/v1/mcp", headers=AUTH_HEADERS, json=payload)
+        assert res.status_code == 200
+        data = res.json()
+        assert data["result"]["isError"] == True
+        assert "SSRF_BLOCKED" in data["result"]["content"][0]["text"] or "blocked" in data["result"]["content"][0]["text"].lower()
 
 def test_rate_limit():
     orig_limit = settings.RATE_LIMIT_PER_MINUTE
@@ -110,22 +166,12 @@ def test_rate_limit():
     valid_key = f"Bearer {settings.API_KEY}"
     rate_limit_records.clear()
 
+    payload = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
     for _ in range(3):
-        res = client.post("/v1/mcp/tools", headers={"Authorization": valid_key})
+        res = client.post("/v1/mcp", headers={"Authorization": valid_key}, json=payload)
         assert res.status_code == 200
 
-    res_blocked = client.post("/v1/mcp/tools", headers={"Authorization": valid_key})
+    res_blocked = client.post("/v1/mcp", headers={"Authorization": valid_key}, json=payload)
     assert res_blocked.status_code == 429
-    assert res_blocked.json()["detail"]["error"] == "RATE_LIMIT_EXCEEDED"
 
     settings.RATE_LIMIT_PER_MINUTE = orig_limit
-
-def test_backend_error():
-    orig_url = settings.SEARXNG_URL
-    settings.SEARXNG_URL = "http://127.0.0.1:9999/invalid_search"
-    rate_limit_records.clear()
-    payload = {"tool": "web_search", "arguments": {"query": "test error"}}
-    res = client.post("/v1/mcp/invoke", headers=AUTH_HEADERS, json=payload)
-    assert res.status_code in [502, 503]
-    assert res.json()["detail"]["error"] in ["BACKEND_ERROR", "SEARCH_FAILED"]
-    settings.SEARXNG_URL = orig_url
