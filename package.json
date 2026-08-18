@@ -1,0 +1,30 @@
+{
+  "name": "mcp-web-engine",
+  "version": "1.0.0",
+  "description": "Privacy-First, Self-Hostable & SSRF-Hardened MCP Server & Web Engine for AI Agents",
+  "main": "bin/cli.js",
+  "bin": {
+    "mcp-web-engine": "bin/cli.js"
+  },
+  "files": [
+    "bin",
+    "*.py",
+    "requirements.txt",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Arbolencio/mcp-web-engine.git"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "searxng",
+    "web-search",
+    "ai-agent",
+    "turbollm"
+  ],
+  "author": "Arbolencio",
+  "license": "MIT"
+}
