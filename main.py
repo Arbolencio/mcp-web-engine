@@ -196,18 +196,14 @@ async def extract_endpoint(body: ExtractMarkdownInput, api_key: str = Depends(ve
 
 async def run_mcp_stdio_server():
     """
-    Stdio MCP protocol handler for CLI executions (e.g. npx -y mcp-web-engine)
+    Robust Stdio MCP protocol handler using asyncio.to_thread for cross-platform compatibility
+    (Works on Linux RPi5, x86_64, Windows, macOS without epoll PermissionError)
     """
-    loop = asyncio.get_event_loop()
-    reader = asyncio.StreamReader()
-    protocol = asyncio.StreamReaderProtocol(reader)
-    await loop.connect_read_pipe(lambda: protocol, sys.stdin)
-
     while True:
-        line = await reader.readline()
-        if not line:
+        line_str = await asyncio.to_thread(sys.stdin.readline)
+        if not line_str:
             break
-        line_str = line.decode("utf-8").strip()
+        line_str = line_str.strip()
         if not line_str:
             continue
         try:
