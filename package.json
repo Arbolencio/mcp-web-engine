@@ -1,10 +1,13 @@
 {
   "name": "mcp-web-engine",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Privacy-First, Self-Hostable & SSRF-Hardened MCP Server & Web Engine for AI Agents",
   "main": "bin/cli.js",
   "bin": {
     "mcp-web-engine": "bin/cli.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "files": [
     "bin",
@@ -23,7 +26,9 @@
     "searxng",
     "web-search",
     "ai-agent",
-    "turbollm"
+    "turbollm",
+    "web-scraper",
+    "ssrf-protection"
   ],
   "author": "Arbolencio",
   "license": "MIT"

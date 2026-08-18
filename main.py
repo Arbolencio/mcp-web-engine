@@ -1,9 +1,11 @@
 """
-Main FastAPI Application Gateway & MCP Protocol Handler
+Main FastAPI Application Gateway & MCP Protocol Handler (SSE & STDIO Modes)
 """
 import time
 import json
 import os
+import sys
+import asyncio
 from fastapi import FastAPI, Depends, HTTPException, status, Response, Request, Header
 from typing import Optional
 from sse_starlette.sse import EventSourceResponse
@@ -49,7 +51,6 @@ async def get_beta_telemetry(api_key: str = Depends(verify_api_key)):
         with open(BETA_KEYS_FILE, "r", encoding="utf-8") as f:
             keys = json.load(f)
         
-        # Redact raw key strings, expose only public beta user telemetry
         summary = {}
         for k, v in keys.items():
             beta_id = v.get("id", "Unknown")
@@ -193,6 +194,41 @@ async def extract_endpoint(body: ExtractMarkdownInput, api_key: str = Depends(ve
     check_rate_limit(api_key)
     return await execute_extract_markdown(body.url, body.max_bytes)
 
+async def run_mcp_stdio_server():
+    """
+    Stdio MCP protocol handler for CLI executions (e.g. npx -y mcp-web-engine)
+    """
+    loop = asyncio.get_event_loop()
+    reader = asyncio.StreamReader()
+    protocol = asyncio.StreamReaderProtocol(reader)
+    await loop.connect_read_pipe(lambda: protocol, sys.stdin)
+
+    while True:
+        line = await reader.readline()
+        if not line:
+            break
+        line_str = line.decode("utf-8").strip()
+        if not line_str:
+            continue
+        try:
+            payload = json.loads(line_str)
+            res_body, _ = await process_mcp_2026_stateless(payload, api_key="local-stdio")
+            if res_body:
+                sys.stdout.write(json.dumps(res_body, ensure_ascii=False) + "\n")
+                sys.stdout.flush()
+        except Exception as e:
+            err_res = {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32603, "message": str(e)}
+            }
+            sys.stdout.write(json.dumps(err_res) + "\n")
+            sys.stdout.flush()
+
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host=settings.HOST, port=settings.PORT, reload=False)
+    is_stdio = "--stdio" in sys.argv or not sys.stdin.isatty()
+    if is_stdio:
+        asyncio.run(run_mcp_stdio_server())
+    else:
+        import uvicorn
+        uvicorn.run("main:app", host=settings.HOST, port=settings.PORT, reload=False)
