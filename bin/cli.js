@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 
 /**
- * MCP Web Engine CLI Entry Point (npm package executable)
+ * MCP Web Engine CLI Entry Point (npm package executable fallback)
  * Spawns the MCP Web Engine Python server (stdio/SSE)
  * Respects SEARXNG_URL, PORT, ALLOWED_NETWORKS, and environment settings.
+ * 
+ * Note: Preferred execution for AI agents is via uvx / PyPI:
+ *   uvx mcp-web-engine
  */
 
 const { spawn, execSync } = require('child_process');
 const path = require('path');
 
-const mainPy = path.join(__dirname, '..', 'main.py');
-const reqTxt = path.join(__dirname, '..', 'requirements.txt');
+const mainPy = path.join(__dirname, '..', 'src', 'mcp_web_engine', 'main.py');
 
 function findPython() {
   const candidates = ['python3', 'python'];
@@ -25,18 +27,7 @@ function findPython() {
 
 const pythonCmd = findPython();
 
-// Auto-check and install python dependencies if missing (pip logs sent to stderr to preserve stdio JSON-RPC)
-try {
-  execSync(`${pythonCmd} -c "import fastapi, uvicorn, requests, bs4"`, { stdio: 'ignore' });
-} catch (e) {
-  try {
-    execSync(`${pythonCmd} -m pip install -r "${reqTxt}" --break-system-packages`, { stdio: [0, 2, 2] });
-  } catch (err) {
-    // Fallback gracefully
-  }
-}
-
-// Spawn MCP Web Engine
+// Spawn MCP Web Engine without modifying system site-packages or running pip install
 const child = spawn(pythonCmd, [mainPy, ...process.argv.slice(2)], {
   stdio: 'inherit',
   env: process.env
