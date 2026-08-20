@@ -3,8 +3,8 @@
 > **Privacy-First, Self-Hostable & SSRF-Hardened MCP Server & Web Engine for AI Agents**
 > **MCP Specification 2026-07-28 Pure Stateless Core & Stdio / HTTP Dual Mode**
 
-[![PyPI Version](https://img.shields.io/badge/pypi-v1.0.4-blue.svg)](https://pypi.org/project/mcp-web-engine/)
-[![npm Version](https://img.shields.io/badge/npm-v1.0.4-red.svg)](https://www.npmjs.com/package/mcp-web-engine)
+[![PyPI Version](https://img.shields.io/badge/pypi-v1.0.5-blue.svg)](https://pypi.org/project/mcp-web-engine/)
+[![npm Version](https://img.shields.io/badge/npm-v1.0.5-red.svg)](https://www.npmjs.com/package/mcp-web-engine)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---

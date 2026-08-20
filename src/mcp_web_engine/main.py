@@ -27,7 +27,7 @@ BETA_KEYS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beta_
 app = FastAPI(
     title="MCP Web Engine & Search Gateway",
     description="High-performance, SSRF-hardened MCP Server (Spec 2026-07-28 Pure Stateless Core & Legacy 2025-11-25)",
-    version="1.0.4"
+    version="1.0.5"
 )
 
 @app.get("/health")

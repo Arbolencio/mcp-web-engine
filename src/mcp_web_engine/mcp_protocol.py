@@ -107,7 +107,7 @@ async def process_mcp_2026_stateless(payload: dict, api_key: Optional[str] = Non
             "protocolVersion": MCP_PROTOCOL_VERSION_2026,
             "server": {
                 "name": "mcp-web-engine",
-                "version": "1.0.4"
+                "version": "1.0.5"
             },
             "capabilities": {
                 "tools": True
