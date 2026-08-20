@@ -63,9 +63,16 @@ async def execute_ddg_fallback(query: str, limit: int = 10):
 
     return {"query": query, "count": 0, "latency_ms": 0, "results": []}
 
+def normalize_searxng_url(base_url: str) -> str:
+    url = base_url.rstrip("/")
+    if not url.endswith("/search"):
+        url = f"{url}/search"
+    return url
+
 async def execute_web_search(query: str, limit: int = 10):
     start_t = time.time()
-    url = f"{settings.SEARXNG_URL}?q={query}&format=json"
+    base_searxng = normalize_searxng_url(settings.SEARXNG_URL)
+    url = f"{base_searxng}?q={query}&format=json"
     
     async with AsyncSession() as session:
         try:
