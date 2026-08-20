@@ -1,92 +1,86 @@
 # 🌐 MCP Web Engine & Search Gateway
 
-> **Public HTTPS Specification 2026-07-28 Pure Stateless Core MCP Server for AI Agents**
+> **Privacy-First, Self-Hostable & SSRF-Hardened MCP Server & Web Engine for AI Agents**
+> **MCP Specification 2026-07-28 Pure Stateless Core & Stdio / HTTP Dual Mode**
+
+[![PyPI Version](https://img.shields.io/badge/pypi-v1.0.4-blue.svg)](https://pypi.org/project/mcp-web-engine/)
+[![npm Version](https://img.shields.io/badge/npm-v1.0.4-red.svg)](https://www.npmjs.com/package/mcp-web-engine)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
-## 🌐 Public Production HTTPS Endpoint (Cloudflare Managed Tunnel)
+## ⚡ Instant Quickstart with `uvx` (Recommended for AI Agents)
 
-- **Public MCP 2026-07-28 Endpoint:** `https://ultimate-ignored-over-light.trycloudflare.com/v1/mcp`
-- **Health Check:** `https://ultimate-ignored-over-light.trycloudflare.com/health`
+AI agents (Claude Desktop, Cursor, Windsurf, TurboLLM, Hermes Agent) can run `mcp-web-engine` in an isolated ephemeral environment with **zero configuration**:
+
+```bash
+# Run stdio MCP server in an isolated environment (50ms start)
+uvx mcp-web-engine
+```
+
+Or run via Git repository:
+```bash
+uvx --from git+https://github.com/Arbolencio/mcp-web-engine mcp-web-engine
+```
 
 ---
 
 ## 📌 What it does & Why it exists
 
-`MCP Web Engine` is a high-performance Model Context Protocol (MCP) server implementing the **MCP Specification 2026-07-28 Pure Stateless Core** (JSON-RPC 2.0 over HTTPS). It provides AI Agents (Claude Desktop, Cursor, Windsurf, MCP Inspector, Hermes Agent) with secure, private access to web search, raw content fetching, and clean HTML-to-Markdown extraction.
+`mcp-web-engine` is a high-performance Model Context Protocol (MCP) server implementing the **MCP Specification 2026-07-28 Pure Stateless Core**. It provides AI Agents with secure, private, and SSRF-hardened access to multi-engine web search, raw content fetching, and clean HTML-to-Markdown extraction.
 
 ### Key Capabilities & Architecture
+- **Dual Execution Mode:**
+  - **Stdio Mode (Default):** Runs JSON-RPC over `stdin`/`stdout` for direct LLM client integration (`uvx mcp-web-engine`).
+  - **HTTP/SSE Server Mode:** Runs FastAPI/Uvicorn server (`mcp-web-engine --serve`).
 - **Pure Stateless Core (Spec 2026-07-28):** Zero sessions, zero state, zero initialize handshake required. Every request is completely independent.
-- **Protocol Methods:** Implements `server/discover`, `tools/list`, and `tools/call` with standard JSON-RPC 2.0 payloads.
+- **Protocol Methods:** Implements `server/discover`, `tools/list`, and `tools/call` with standard JSON-RPC 2.0.
 - **Zero Third-Party Tracking:** Powered by an internal SearXNG meta-search engine aggregating 70+ sources with DuckDuckGo fallback.
 - **SSRF Hardened:** Pre-request DNS resolution checks prevent agents from accessing internal networks (`localhost`, `127.0.0.1`, `192.168.x.x`, `169.254.169.254`). Step-by-step HTTP 301/302 redirect re-validation.
 - **TLS Fingerprinting:** Powered by `curl_cffi` (Chrome 120+ TLS impersonation) for clean research scraping without heavy browser overhead.
 
 ---
 
-## 🏗️ Architecture
+## 🔌 Integration Guides
 
-```
-[ MCP Client / Claude / Cursor / Windsurf / Inspector ]
-                         │
-        (HTTPS Header: Authorization: Bearer sk_mcp_...)
-        (HTTPS Header: MCP-Protocol-Version: 2026-07-28)
-                         ▼
-        [ Cloudflare Managed HTTPS Tunnel ]
-                         │
-                         ▼
-        [ FastAPI Gateway (Port 5050) ]
-           ├── Endpoint: POST /v1/mcp (Pure Stateless Core)
-           ├── Security & Auth (Bearer Token + Sliding Window Rate Limiter)
-           ├── SSRF Validator (Pre-request DNS + IP Subnet Filtering)
-           ├── Method 1: server/discover (Server Metadata Discovery)
-           ├── Method 2: tools/list (Tools Discovery)
-           └── Method 3: tools/call (Tool Execution Engine)
+### 1. TurboLLM / Local MCP Catalog
+```typescript
+{
+  id: 'mcp-web-engine',
+  name: 'MCP Web Engine',
+  cat: 'Search',
+  desc: 'Privacy-first, self-hostable & SSRF-hardened web search engine and scraper for AI agents.',
+  cmd: 'uvx mcp-web-engine',
+  uvx: true,
+  argNote: 'Requires a running SearXNG instance.',
+  envs: [
+    { key: 'SEARXNG_URL', desc: 'SearXNG meta-search endpoint (default: http://127.0.0.1:8082/search)', required: false },
+  ],
+}
 ```
 
----
-
-## 🚀 Quickstart & Docker Installation (< 2 Minutes)
-
-```bash
-# 1. Clone Repository
-git clone https://github.com/Arbolencio/mcp-web-engine.git
-cd mcp-web-engine
-
-# 2. Copy Environment Example
-cp .env.example .env
-
-# 3. Launch with Docker Compose
-docker compose up -d
-
-# 4. Verify Health Check
-curl -s https://ultimate-ignored-over-light.trycloudflare.com/health
-# {"status":"ok","environment":"production","searxng_url":"http://host.docker.internal:8082/search","mcp_version":"2026-07-28"}
-```
-
----
-
-## 🔌 Connecting from MCP Clients (Cursor, Windsurf, Inspector, Claude Desktop)
-
-### 1. Cursor / Windsurf / MCP Inspector (Direct HTTPS):
-- **Server Endpoint:** `https://ultimate-ignored-over-light.trycloudflare.com/v1/mcp`
-- **Headers:**
-  - `Authorization: Bearer YOUR_BETA_KEY_HERE`
-  - `MCP-Protocol-Version: 2026-07-28`
-
-### 2. Claude Desktop (via `mcp-remote` bridge):
+### 2. Claude Desktop (`claude_desktop_config.json`)
 ```json
 {
   "mcpServers": {
     "mcp-web-engine": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "https://ultimate-ignored-over-light.trycloudflare.com/v1/mcp",
-        "--header",
-        "Authorization: Bearer YOUR_BETA_KEY_HERE"
-      ]
+      "command": "uvx",
+      "args": ["mcp-web-engine"],
+      "env": {
+        "SEARXNG_URL": "http://127.0.0.1:8082/search"
+      }
+    }
+  }
+}
+```
+
+### 3. Cursor / Windsurf / Hermes Agent
+```json
+{
+  "mcpServers": {
+    "mcp-web-engine": {
+      "command": "uvx",
+      "args": ["mcp-web-engine"]
     }
   }
 }
@@ -94,68 +88,50 @@ curl -s https://ultimate-ignored-over-light.trycloudflare.com/health
 
 ---
 
-## 🛠️ MCP 2026-07-28 Stateless Protocol Lifecycle
+## 🛠️ Provided MCP Tools
 
-### 1. `server/discover` Discovery
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "server/discover",
-  "params": {}
-}
-```
-
-### 2. `tools/list` Discovery
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "method": "tools/list",
-  "params": {}
-}
-```
-
-### 3. `tools/call` Execution
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 3,
-  "method": "tools/call",
-  "params": {
-    "name": "web_search",
-    "arguments": {
-      "query": "Model Context Protocol 2026 specification",
-      "limit": 5
-    }
-  }
-}
-```
+| Tool Name | Parameters | Description |
+|---|---|---|
+| `web_search` | `query` (str), `limit` (int, default: 10) | Multi-engine meta-search via SearXNG returning structured JSON results |
+| `fetch_url` | `url` (str), `max_bytes` (int, optional) | Fetches raw web content after strict SSRF security validation |
+| `extract_markdown` | `url` (str), `max_bytes` (int, optional) | Scrapes a webpage and converts HTML into clean, LLM-optimized Markdown |
 
 ---
 
-## 🔑 Managing Beta Keys
+## ⚙️ Configuration & Environment Variables
 
-Manage API access keys using the CLI helper:
+| Variable | Default | Description |
+|---|---|---|
+| `SEARXNG_URL` | `http://127.0.0.1:8082/search` | SearXNG meta-search endpoint |
+| `PORT` | `5050` | HTTP/SSE server port (used only when running with `--serve`) |
+| `HOST` | `0.0.0.0` | HTTP/SSE server binding host |
+| `API_KEY` | `""` | Optional authentication key for HTTP endpoints |
+
+---
+
+## 🛠️ Development & Building
 
 ```bash
-# Generate 20 Beta Keys
-python manage_beta_keys.py init20
+# Clone Repository
+git clone https://github.com/Arbolencio/mcp-web-engine.git
+cd mcp-web-engine
 
-# View Beta User Telemetry
-python manage_beta_keys.py telemetry
+# Build Wheel for PyPI
+python3 -m build --wheel
 
-# Revoke a key by ID
-python manage_beta_keys.py revoke --id Beta_001
+# Run locally in stdio mode via uv
+uv run python -m mcp_web_engine.main
+
+# Run locally in HTTP server mode via uv
+uv run python -m mcp_web_engine.main --serve
 ```
 
 ---
 
-## 🛡️ Security & Honest Technical Limits
+## 🛡️ Security & SSRF Protection
 
 - **SSRF Hardening:** Blocks `localhost`, loopbacks, private subnets (`10.0.0.0/8`, `192.168.0.0/16`, `172.16.0.0/12`), percent-encoding bypasses (`%31%32%37...`), and re-validates `Location` headers on HTTP redirects step-by-step.
-- **Rate Limiting:** Default limit of 120 req/min per key.
-- **Honest Positioning:** Designed for research, documentation retrieval, and web search. Auth-walled sites requiring login (e.g. private social feeds) are not supported.
+- **Environment Isolation:** Zero global site-packages pollution when executed via `uvx`.
 
 ---
 
