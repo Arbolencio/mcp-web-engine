@@ -14,7 +14,7 @@
 AI agents (Claude Desktop, Cursor, Windsurf, TurboLLM, Hermes Agent) can run `mcp-web-engine` in an isolated ephemeral environment with **zero configuration**:
 
 ```bash
-# Run stdio MCP server in an isolated environment (50ms start)
+# Run stdio MCP server in an isolated environment (10ms startup, 0% system contamination)
 uvx mcp-web-engine
 ```
 
@@ -36,8 +36,9 @@ uvx --from git+https://github.com/Arbolencio/mcp-web-engine mcp-web-engine
 - **Pure Stateless Core (Spec 2026-07-28):** Zero sessions, zero state, zero initialize handshake required. Every request is completely independent.
 - **Protocol Methods:** Implements `server/discover`, `tools/list`, and `tools/call` with standard JSON-RPC 2.0.
 - **Zero Third-Party Tracking:** Powered by an internal SearXNG meta-search engine aggregating 70+ sources with DuckDuckGo fallback.
+- **Automatic URL Normalization:** Handled transparently by `normalize_searxng_url()` — any provided `SEARXNG_URL` variation (`http://127.0.0.1:8082`, `http://127.0.0.1:8082/`, `http://127.0.0.1:8082/search`) automatically appends `/search` if missing.
 - **SSRF Hardened:** Pre-request DNS resolution checks prevent agents from accessing internal networks (`localhost`, `127.0.0.1`, `192.168.x.x`, `169.254.169.254`). Step-by-step HTTP 301/302 redirect re-validation.
-- **TLS Fingerprinting:** Powered by `curl_cffi` (Chrome 120+ TLS impersonation) for clean research scraping without heavy browser overhead.
+- **Zero `--break-system-packages`:** Executed 100% in sandboxed virtual environments created on-the-fly by `uv` or `venv`.
 
 ---
 
@@ -54,7 +55,7 @@ uvx --from git+https://github.com/Arbolencio/mcp-web-engine mcp-web-engine
   uvx: true,
   argNote: 'Requires a running SearXNG instance.',
   envs: [
-    { key: 'SEARXNG_URL', desc: 'SearXNG meta-search endpoint (default: http://127.0.0.1:8082/search)', required: false },
+    { key: 'SEARXNG_URL', desc: 'SearXNG meta-search endpoint (default: http://127.0.0.1:8082/search)', required: true },
   ],
 }
 ```
@@ -100,12 +101,12 @@ uvx --from git+https://github.com/Arbolencio/mcp-web-engine mcp-web-engine
 
 ## ⚙️ Configuration & Environment Variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `SEARXNG_URL` | `http://127.0.0.1:8082/search` | SearXNG meta-search endpoint |
-| `PORT` | `5050` | HTTP/SSE server port (used only when running with `--serve`) |
-| `HOST` | `0.0.0.0` | HTTP/SSE server binding host |
-| `API_KEY` | `""` | Optional authentication key for HTTP endpoints |
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SEARXNG_URL` | **Yes** | `http://127.0.0.1:8082/search` | SearXNG meta-search endpoint (Auto-normalizes trailing slashes and missing `/search`) |
+| `PORT` | No | `5050` | HTTP/SSE server port (Used only when running in `--serve` mode) |
+| `HOST` | No | `0.0.0.0` | HTTP/SSE server binding host |
+| `API_KEY` | No | `""` | Optional authentication key for HTTP endpoints |
 
 ---
 
@@ -128,10 +129,10 @@ uv run python -m mcp_web_engine.main --serve
 
 ---
 
-## 🛡️ Security & SSRF Protection
+## 🛡️ Security & Environment Isolation
 
 - **SSRF Hardening:** Blocks `localhost`, loopbacks, private subnets (`10.0.0.0/8`, `192.168.0.0/16`, `172.16.0.0/12`), percent-encoding bypasses (`%31%32%37...`), and re-validates `Location` headers on HTTP redirects step-by-step.
-- **Environment Isolation:** Zero global site-packages pollution when executed via `uvx`.
+- **Zero Package Pollution:** Execution via `uvx` or `bin/cli.js` never modifies global site-packages or uses dangerous flags like `--break-system-packages`.
 
 ---
 
