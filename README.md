@@ -51,9 +51,9 @@ uvx --from git+https://github.com/Arbolencio/mcp-web-engine mcp-web-engine
   name: 'MCP Web Engine',
   cat: 'Search',
   desc: 'Privacy-first, self-hostable & SSRF-hardened web search engine and scraper for AI agents.',
-  cmd: 'uvx mcp-web-engine',
+  cmd: 'uvx mcp-web-engine==1.1.0',
   uvx: true,
-  argNote: 'Requires a running SearXNG instance.',
+  argNote: 'Requires a running SearXNG instance. No query leaves the host unless ALLOW_DDG_FALLBACK is enabled.',
   envs: [
     { key: 'SEARXNG_URL', desc: 'SearXNG meta-search endpoint (default: http://127.0.0.1:8082/search)', required: true },
   ],
@@ -104,6 +104,7 @@ uvx --from git+https://github.com/Arbolencio/mcp-web-engine mcp-web-engine
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `SEARXNG_URL` | **Yes** | `http://127.0.0.1:8082/search` | SearXNG meta-search endpoint (Auto-normalizes trailing slashes and missing `/search`) |
+| `ALLOW_DDG_FALLBACK` | No | `false` | **Privacy switch.** When `false` (default), a SearXNG failure returns `SEARXNG_UNAVAILABLE` instead of quietly querying DuckDuckGo. Set to `true` only if you accept that queries leave your host on failure. |
 | `PORT` | No | `5050` | HTTP/SSE server port (Used only when running in `--serve` mode) |
 | `HOST` | No | `0.0.0.0` | HTTP/SSE server binding host |
 | `API_KEY` | No | `""` | Optional authentication key for HTTP endpoints |

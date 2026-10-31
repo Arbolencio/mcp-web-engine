@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = Field(default=120, description="Max requests per minute per API key")
     DEFAULT_TIMEOUT_SEC: float = Field(default=10.0, description="Default HTTP request timeout in seconds")
     MAX_PAYLOAD_BYTES: int = Field(default=2 * 1024 * 1024, description="Max payload size limit (2 MB)")
+
+    # Privacy: the DuckDuckGo HTML fallback is deliberately opt-in, so that a query
+    # never leaves the host unless the operator explicitly allows it.
+    ALLOW_DDG_FALLBACK: bool = Field(default=False, description="Fall back to html.duckduckgo.com when SearXNG is unavailable (privacy trade-off, off by default)")
     
     # Environment & Logging
     ENV: str = Field(default="production", description="Environment (development/production)")

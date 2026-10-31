@@ -72,7 +72,8 @@ def normalize_searxng_url(base_url: str) -> str:
 async def execute_web_search(query: str, limit: int = 10):
     start_t = time.time()
     base_searxng = normalize_searxng_url(settings.SEARXNG_URL)
-    url = f"{base_searxng}?q={query}&format=json"
+    query_params = urllib.parse.urlencode({"q": query, "format": "json"})
+    url = f"{base_searxng}?{query_params}"
     
     async with AsyncSession() as session:
         try:
@@ -98,8 +99,19 @@ async def execute_web_search(query: str, limit: int = 10):
         except Exception:
             pass
 
-    # SearXNG failed or timed out -> Fallback to direct DuckDuckGo HTML parser
-    return await execute_ddg_fallback(query, limit)
+    # SearXNG failed or timed out -> only fall back when the operator opted in,
+    # so that no query ever leaves the host without explicit consent.
+    if settings.ALLOW_DDG_FALLBACK:
+        return await execute_ddg_fallback(query, limit)
+
+    return {
+        "query": query,
+        "count": 0,
+        "latency_ms": round((time.time() - start_t) * 1000, 2),
+        "results": [],
+        "error": "SEARXNG_UNAVAILABLE",
+        "detail": "SearXNG did not answer. The DuckDuckGo fallback is disabled by default; set ALLOW_DDG_FALLBACK=true to enable it."
+    }
 
 async def execute_fetch_url(url: str, max_bytes: int = None):
     current_url = validate_ssrf_url(url)

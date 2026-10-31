@@ -27,7 +27,7 @@ BETA_KEYS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beta_
 app = FastAPI(
     title="MCP Web Engine & Search Gateway",
     description="High-performance, SSRF-hardened MCP Server (Spec 2026-07-28 Pure Stateless Core & Legacy 2025-11-25)",
-    version="1.0.5"
+    version="1.1.0"
 )
 
 @app.get("/health")
@@ -208,8 +208,21 @@ async def run_mcp_stdio_server():
             continue
         try:
             payload = json.loads(line_str)
-            res_body, _ = await process_mcp_2026_stateless(payload, api_key="local-stdio")
-            if res_body:
+
+            # Stdio transports are session-oriented by nature: every stdio client
+            # (Claude Desktop, TurboLLM, Cline, ...) opens with `initialize`
+            # + `notifications/initialized`, which belong to the legacy stateful core.
+            # Notifications carry no `id` and MUST NOT be answered -- replying with
+            # id: null is invalid JSON-RPC and breaks the client.
+            method = payload.get("method") if isinstance(payload, dict) else None
+            is_notification = isinstance(payload, dict) and "id" not in payload
+
+            if method in ("initialize", "notifications/initialized", "initialized") or is_notification:
+                res_body, _http_status, _session_id = await process_mcp_2025_legacy_stateful(payload)
+            else:
+                res_body, _http_status = await process_mcp_2026_stateless(payload, api_key="local-stdio")
+
+            if res_body and not is_notification:
                 sys.stdout.write(json.dumps(res_body, ensure_ascii=False) + "\n")
                 sys.stdout.flush()
         except Exception as e:

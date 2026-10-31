@@ -107,7 +107,7 @@ async def process_mcp_2026_stateless(payload: dict, api_key: Optional[str] = Non
             "protocolVersion": MCP_PROTOCOL_VERSION_2026,
             "server": {
                 "name": "mcp-web-engine",
-                "version": "1.0.5"
+                "version": "1.1.0"
             },
             "capabilities": {
                 "tools": True
@@ -183,10 +183,16 @@ async def process_mcp_2025_legacy_stateful(payload: dict, session_id: Optional[s
     params = payload.get("params", {})
 
     if method == "initialize":
+        # Version negotiation: echo the client's requested version when we can speak
+        # it, otherwise announce the newest legacy version we implement. This keeps
+        # strict clients (e.g. 2024-11-05) connected instead of dropping them.
+        client_version = params.get("protocolVersion") if isinstance(params, dict) else None
+        supported_versions = {"2024-11-05", "2025-03-26", "2025-06-18", MCP_PROTOCOL_VERSION_LEGACY}
+        negotiated_version = client_version if client_version in supported_versions else MCP_PROTOCOL_VERSION_LEGACY
         res_data = {
-            "protocolVersion": MCP_PROTOCOL_VERSION_LEGACY,
+            "protocolVersion": negotiated_version,
             "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "mcp-web-engine-legacy", "version": "1.0.0"}
+            "serverInfo": {"name": "mcp-web-engine", "version": "1.1.0"}
         }
         return make_jsonrpc_response(request_id, res_data), status.HTTP_200_OK, current_sess_id
 
