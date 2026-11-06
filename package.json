@@ -1,7 +1,7 @@
 {
   "name": "mcp-web-engine",
-  "version": "1.0.5",
-  "description": "Privacy-First, Self-Hostable & SSRF-Hardened MCP Server & Web Engine for AI Agents",
+  "version": "1.2.0",
+  "description": "Self-hostable MCP search, public-page fetch and Markdown extraction",
   "main": "bin/cli.js",
   "bin": {
     "mcp-web-engine": "bin/cli.js"
@@ -11,7 +11,9 @@
   },
   "files": [
     "bin",
-    "*.py",
+    "src/mcp_web_engine/*.py",
+    "pyproject.toml",
+    "docs/operations.md",
     "requirements.txt",
     "README.md",
     "LICENSE"

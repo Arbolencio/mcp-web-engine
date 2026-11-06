@@ -10,7 +10,12 @@ import secrets
 import time
 import argparse
 
-KEYS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beta_keys.json")
+import hashlib
+import tempfile
+from pathlib import Path
+from src.mcp_web_engine.state_store import beta_keys_path, read_usage
+
+KEYS_FILE = str(beta_keys_path())
 
 def load_keys():
     if not os.path.exists(KEYS_FILE):
@@ -18,12 +23,24 @@ def load_keys():
     try:
         with open(KEYS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
-        return {}
+    except (OSError, ValueError) as exc:
+        raise RuntimeError("Cannot read operator key store") from exc
 
 def save_keys(keys):
-    with open(KEYS_FILE, "w", encoding="utf-8") as f:
-        json.dump(keys, f, indent=2)
+    target = Path(KEYS_FILE)
+    target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=target.parent,
+                                         prefix=".beta-keys-", delete=False) as stream:
+            temporary = stream.name
+            json.dump(keys, stream, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target)
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
 
 def generate_20_beta_keys():
     keys = {}
@@ -74,7 +91,9 @@ def list_beta_telemetry():
     total_errs = 0
     
     for k, info in keys.items():
-        t = info.get("telemetry", {})
+        usage = read_usage(hashlib.sha256(k.encode("utf-8")).hexdigest())
+        t = {**info.get("telemetry", {}), **usage}
+        t["requests"] = max(info.get("telemetry", {}).get("requests", 0), usage.get("admissions", 0))
         reqs = t.get("requests", 0)
         errs = t.get("errors", 0)
         total_reqs += reqs

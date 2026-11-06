@@ -1,70 +1,101 @@
 """
 Main FastAPI Application Gateway & MCP Protocol Handler (SSE & STDIO Modes)
 """
-import time
+import asyncio
 import json
 import os
 import sys
-import asyncio
-from fastapi import FastAPI, Depends, HTTPException, status, Response, Request, Header
+import time
 from typing import Optional
-from sse_starlette.sse import EventSourceResponse
-from .config import settings
-from .security import verify_api_key, check_rate_limit
-from .logging_obs import logger, metrics
-from .mcp_tools import MCP_TOOL_DEFINITIONS, handle_mcp_tool_call, WebSearchInput, FetchUrlInput, ExtractMarkdownInput
-from .mcp_protocol import (
-    process_mcp_2026_stateless,
-    process_mcp_2025_legacy_stateful,
-    validate_2026_mcp_headers,
-    MCP_PROTOCOL_VERSION_2026,
-    MCP_PROTOCOL_VERSION_LEGACY
-)
-from .web_engine import execute_web_search, execute_fetch_url, execute_extract_markdown
 
-BETA_KEYS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beta_keys.json")
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
+from pydantic import ValidationError
+from sse_starlette.sse import EventSourceResponse
+
+from . import __version__
+from . import security as security_module
+from .config import settings
+from .logging_obs import metrics
+from .mcp_protocol import (
+    INTERNAL_ERROR,
+    INVALID_REQUEST,
+    MCP_PROTOCOL_VERSION_2026,
+    MCP_PROTOCOL_VERSION_LEGACY,
+    PARSE_ERROR,
+    is_rpc_notification,
+    make_jsonrpc_error,
+    process_mcp_2025_legacy_stateful,
+    process_mcp_2026_stateless,
+    validate_2026_mcp_headers,
+    validate_rpc_envelope,
+)
+from .mcp_tools import (
+    MCP_TOOL_DEFINITIONS,
+    ExtractMarkdownInput,
+    WebSearchInput,
+    handle_mcp_tool_call,
+)
+from .resource_limits import RequestSizeLimitMiddleware
+from .security import check_rate_limit, verify_api_key, verify_master_api_key
+from .state_store import StateUnavailable
 
 app = FastAPI(
     title="MCP Web Engine & Search Gateway",
-    description="High-performance, SSRF-hardened MCP Server (Spec 2026-07-28 Pure Stateless Core & Legacy 2025-11-25)",
-    version="1.1.0"
+    description="Self-hostable search, public-page fetch and Markdown extraction. Stdio and HTTP transports.",
+    version=__version__
 )
+
+app.add_middleware(RequestSizeLimitMiddleware)
+
+def _reject_non_finite(value):
+    raise ValueError("Non-finite JSON number")
+
+
+def _load_json(value):
+    return json.loads(value, parse_constant=_reject_non_finite)
 
 @app.get("/health")
 async def health_check():
     return {
         "status": "ok",
         "environment": settings.ENV,
-        "searxng_url": settings.SEARXNG_URL,
+
         "mcp_version": MCP_PROTOCOL_VERSION_2026
     }
 
 @app.get("/v1/metrics")
-async def get_metrics(api_key: str = Depends(verify_api_key)):
+async def get_metrics(api_key: str = Depends(verify_master_api_key)):
+    check_rate_limit(api_key)
     return metrics.get_summary()
 
 @app.get("/v1/beta/telemetry")
-async def get_beta_telemetry(api_key: str = Depends(verify_api_key)):
-    if not os.path.exists(BETA_KEYS_FILE):
+async def get_beta_telemetry(api_key: str = Depends(verify_master_api_key)):
+    check_rate_limit(api_key)
+    if not os.path.exists(security_module.BETA_KEYS_FILE):
         return {"users_count": 0, "telemetry": {}}
     try:
-        with open(BETA_KEYS_FILE, "r", encoding="utf-8") as f:
+        with open(security_module.BETA_KEYS_FILE, "r", encoding="utf-8") as f:
             keys = json.load(f)
         
         summary = {}
         for k, v in keys.items():
             beta_id = v.get("id", "Unknown")
+            usage = metrics.get_beta_telemetry(k)
+            baseline = v.get("telemetry", {}).get("requests", 0)
+            if type(baseline) is not int or baseline < 0:
+                raise ValueError("Invalid legacy usage baseline")
+            usage["admissions"] = usage["requests"] = max(baseline, usage["admissions"])
             summary[beta_id] = {
                 "id": beta_id,
                 "status": v.get("status"),
                 "limit": v.get("limit"),
-                "telemetry": v.get("telemetry", {})
+                "telemetry": usage
             }
         return {"users_count": len(summary), "telemetry": summary}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except (OSError, ValueError, TypeError, AttributeError, StateUnavailable):
+        raise HTTPException(status_code=503, detail={"error": "TELEMETRY_UNAVAILABLE"}) from None
 
-# OFFICIAL MCP 2026-07-28 STATELESS CORE ENDPOINT (POST /v1/mcp)
+# Custom stateless HTTP compatibility endpoint (POST /v1/mcp).
 @app.post("/v1/mcp")
 async def mcp_2026_stateless_endpoint(
     request: Request,
@@ -75,13 +106,12 @@ async def mcp_2026_stateless_endpoint(
 ):
     check_rate_limit(api_key)
     try:
-        payload = await request.json()
+        payload = _load_json(await request.body())
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "INVALID_JSON", "message": "Request body must be valid JSON-RPC 2.0."}
-        )
+        return Response(content=json.dumps(make_jsonrpc_error(None, PARSE_ERROR, "Invalid JSON.")), status_code=400, media_type="application/json")
 
+    if is_rpc_notification(payload):
+        return Response(status_code=202)
     validate_2026_mcp_headers(mcp_protocol_version, mcp_method, mcp_name, payload)
 
     res_body, http_status = await process_mcp_2026_stateless(payload, api_key=api_key)
@@ -109,14 +139,11 @@ async def mcp_2025_legacy_endpoint(
 ):
     check_rate_limit(api_key)
     try:
-        payload = await request.json()
+        payload = _load_json(await request.body())
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "INVALID_JSON", "message": "Request body must be valid JSON-RPC 2.0."}
-        )
+        return Response(content=json.dumps(make_jsonrpc_error(None, PARSE_ERROR, "Invalid JSON.")), status_code=400, media_type="application/json")
 
-    res_body, http_status, out_session_id = await process_mcp_2025_legacy_stateful(payload, mcp_session_id)
+    res_body, http_status, out_session_id = await process_mcp_2025_legacy_stateful(payload, mcp_session_id, api_key=api_key)
     
     headers = {
         "MCP-Protocol-Version": MCP_PROTOCOL_VERSION_LEGACY,
@@ -159,7 +186,7 @@ async def invoke_mcp_tool(payload: dict, api_key: str = Depends(verify_api_key))
     tool_name = payload.get("tool")
     arguments = payload.get("arguments", {})
 
-    if not tool_name:
+    if not isinstance(tool_name, str) or tool_name not in {tool['name'] for tool in MCP_TOOL_DEFINITIONS} or not isinstance(arguments, dict):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": "MISSING_TOOL", "message": "Payload must include 'tool' parameter."}
@@ -171,67 +198,69 @@ async def invoke_mcp_tool(payload: dict, api_key: str = Depends(verify_api_key))
         lat = round((time.time() - start_t) * 1000, 2)
         metrics.record(tool_name, lat, success=True, api_key=api_key)
         return {"tool": tool_name, "status": "success", "result": res}
+    except ValidationError:
+        lat = round((time.time() - start_t) * 1000, 2)
+        metrics.record(tool_name, lat, success=False, api_key=api_key)
+        raise HTTPException(400, detail={"error": "INVALID_TOOL_ARGUMENTS"}) from None
     except HTTPException as e:
         lat = round((time.time() - start_t) * 1000, 2)
         metrics.record(tool_name, lat, success=False, api_key=api_key)
         raise e
-    except Exception as e:
+    except Exception:
         lat = round((time.time() - start_t) * 1000, 2)
         metrics.record(tool_name, lat, success=False, api_key=api_key)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": "TOOL_EXECUTION_ERROR", "message": str(e)}
+            detail={"error": "TOOL_EXECUTION_ERROR", "message": "Tool execution failed."}
         )
 
 # Direct REST Endpoints
 @app.post("/v1/search")
 async def search_endpoint(body: WebSearchInput, api_key: str = Depends(verify_api_key)):
-    check_rate_limit(api_key)
-    return await execute_web_search(body.query, body.limit)
+    result = await invoke_mcp_tool({"tool": "web_search", "arguments": body.model_dump()}, api_key)
+    return result["result"]
 
 @app.post("/v1/extract")
 async def extract_endpoint(body: ExtractMarkdownInput, api_key: str = Depends(verify_api_key)):
-    check_rate_limit(api_key)
-    return await execute_extract_markdown(body.url, body.max_bytes)
+    result = await invoke_mcp_tool({"tool": "extract_markdown", "arguments": body.model_dump()}, api_key)
+    return result["result"]
 
 async def run_mcp_stdio_server():
-    """
-    Robust Stdio MCP protocol handler using asyncio.to_thread for cross-platform compatibility
-    (Works on Linux RPi5, x86_64, Windows, macOS without epoll PermissionError)
-    """
+    """Bounded JSON-lines transport. Stdout contains protocol messages only."""
+    session_id = None
     while True:
-        line_str = await asyncio.to_thread(sys.stdin.readline)
-        if not line_str:
+        line = await asyncio.to_thread(sys.stdin.readline, settings.MAX_PAYLOAD_BYTES + 1)
+        if not line:
             break
-        line_str = line_str.strip()
-        if not line_str:
+        if len(line.encode("utf-8", errors="surrogatepass")) > settings.MAX_PAYLOAD_BYTES:
+            while line and not line.endswith("\n"):
+                line = await asyncio.to_thread(sys.stdin.readline, settings.MAX_PAYLOAD_BYTES + 1)
+            result = make_jsonrpc_error(None, INVALID_REQUEST, "Message exceeds MAX_PAYLOAD_BYTES.")
+        elif not line.strip():
             continue
-        try:
-            payload = json.loads(line_str)
-
-            # Stdio transports are session-oriented by nature: every stdio client
-            # (Claude Desktop, TurboLLM, Cline, ...) opens with `initialize`
-            # + `notifications/initialized`, which belong to the legacy stateful core.
-            # Notifications carry no `id` and MUST NOT be answered -- replying with
-            # id: null is invalid JSON-RPC and breaks the client.
-            method = payload.get("method") if isinstance(payload, dict) else None
-            is_notification = isinstance(payload, dict) and "id" not in payload
-
-            if method in ("initialize", "notifications/initialized", "initialized") or is_notification:
-                res_body, _http_status, _session_id = await process_mcp_2025_legacy_stateful(payload)
+        else:
+            try:
+                payload = _load_json(line)
+            except (ValueError, RecursionError):
+                result = make_jsonrpc_error(None, PARSE_ERROR, "Invalid JSON.")
             else:
-                res_body, _http_status = await process_mcp_2026_stateless(payload, api_key="local-stdio")
-
-            if res_body and not is_notification:
-                sys.stdout.write(json.dumps(res_body, ensure_ascii=False) + "\n")
-                sys.stdout.flush()
-        except Exception as e:
-            err_res = {
-                "jsonrpc": "2.0",
-                "id": None,
-                "error": {"code": -32603, "message": str(e)}
-            }
-            sys.stdout.write(json.dumps(err_res) + "\n")
+                if is_rpc_notification(payload):
+                    continue
+                result = validate_rpc_envelope(payload)
+                if result is None:
+                    # Tools are requests, never notifications. Ignore notifications
+                    # before dispatch so they cannot cause unacknowledged I/O.
+                    if "id" not in payload:
+                        continue
+                    try:
+                        if payload["method"] == "server/discover":
+                            result, _ = await process_mcp_2026_stateless(payload, api_key="local-stdio")
+                        else:
+                            result, _, session_id = await process_mcp_2025_legacy_stateful(payload, session_id, api_key="local-stdio")
+                    except Exception:
+                        result = make_jsonrpc_error(payload.get("id"), INTERNAL_ERROR, "Internal error.")
+        if result:
+            sys.stdout.write(json.dumps(result, ensure_ascii=True) + "\n")
             sys.stdout.flush()
 
 def cli_entrypoint():
@@ -241,6 +270,8 @@ def cli_entrypoint():
     """
     is_serve = "--serve" in sys.argv or "--sse" in sys.argv
     if is_serve:
+        if len(settings.API_KEY.strip()) < 32:
+            raise SystemExit("HTTP mode requires an operator-generated API_KEY of at least 32 characters.")
         import uvicorn
         uvicorn.run("mcp_web_engine.main:app", host=settings.HOST, port=settings.PORT, reload=False)
     else:

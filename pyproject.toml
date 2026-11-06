@@ -1,13 +1,13 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [project]
 name = "mcp-web-engine"
-version = "1.1.0"
-description = "Privacy-First, Self-Hostable & SSRF-Hardened MCP Server & Web Engine for AI Agents"
+version = "1.2.0"
+description = "Self-hostable MCP search, public-page fetch and Markdown extraction"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = "MIT"
 authors = [
     { name = "Arbolencio" }
@@ -23,14 +23,14 @@ keywords = [
     "ssrf-protection"
 ]
 dependencies = [
-    "fastapi>=0.109.0",
-    "uvicorn>=0.27.0",
-    "pydantic>=2.5.0",
-    "pydantic-settings>=2.1.0",
-    "curl-cffi>=0.6.0",
-    "beautifulsoup4>=4.12.0",
-    "html2text>=2024.1.14",
-    "sse-starlette>=2.0.0"
+    "fastapi>=0.162.0,<1",
+    "uvicorn>=0.54.0,<1",
+    "pydantic>=2.14.3,<3",
+    "pydantic-settings>=2.16.2,<3",
+    "curl-cffi>=0.17.0,<0.18",
+    "beautifulsoup4>=4.15.0,<5",
+    "html2text>=2025.4.15,<2027",
+    "sse-starlette>=3.6.0,<4"
 ]
 
 [project.scripts]
@@ -42,3 +42,17 @@ Repository = "https://github.com/Arbolencio/mcp-web-engine.git"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcp_web_engine"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10", "pytest-asyncio>=0.26,<2", "httpx>=0.28,<1"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

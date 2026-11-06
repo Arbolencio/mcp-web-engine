@@ -2,20 +2,23 @@
 MCP Tools Definition & Schema Handlers (web_search, fetch_url, extract_markdown)
 """
 from typing import Optional
+
 from pydantic import BaseModel, Field
-from .web_engine import execute_web_search, execute_fetch_url, execute_extract_markdown
+
+from .web_engine import execute_extract_markdown, execute_fetch_url, execute_web_search
+
 
 class WebSearchInput(BaseModel):
-    query: str = Field(..., description="The search query keywords", min_length=2)
-    limit: Optional[int] = Field(default=10, description="Max results to return (1-25)", ge=1, le=25)
+    query: str = Field(..., description="The search query keywords", min_length=2, max_length=4096)
+    limit: int = Field(default=10, description="Max results to return (1-25)", ge=1, le=25)
 
 class FetchUrlInput(BaseModel):
-    url: str = Field(..., description="Target URL to fetch content from")
-    max_bytes: Optional[int] = Field(default=None, description="Max bytes payload limit")
+    url: str = Field(..., description="Target public HTTP(S) URL", min_length=1, max_length=8192)
+    max_bytes: Optional[int] = Field(default=None, description="Response byte limit, capped by operator MAX_PAYLOAD_BYTES", ge=1, le=16 * 1024 * 1024)
 
 class ExtractMarkdownInput(BaseModel):
-    url: str = Field(..., description="Target URL to convert to clean Markdown")
-    max_bytes: Optional[int] = Field(default=None, description="Max bytes payload limit")
+    url: str = Field(..., description="Target public HTTP(S) URL", min_length=1, max_length=8192)
+    max_bytes: Optional[int] = Field(default=None, description="Response byte limit, capped by operator MAX_PAYLOAD_BYTES", ge=1, le=16 * 1024 * 1024)
 
 # MCP Protocol Tool Definitions
 MCP_TOOL_DEFINITIONS = [

@@ -1,29 +1,11 @@
 FROM python:3.11-slim
-
-# Create non-root user
-RUN groupadd -g 1000 appgroup && \
-    useradd -u 1000 -g appgroup -s /bin/bash -m appuser
-
+RUN groupadd --gid 1000 appgroup && useradd --uid 1000 --gid appgroup --create-home appuser
 WORKDIR /app
-
-# Install security updates & system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libssl-dev \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY --chown=appuser:appgroup . .
-
-# Switch to non-root user
+COPY pyproject.toml README.md LICENSE ./
+COPY src/ ./src/
+RUN pip install --no-cache-dir .
+RUN mkdir -p /home/appuser/.local/state/mcp-web-engine && chown -R appuser:appgroup /home/appuser/.local
 USER appuser
-
-EXPOSE 5000
-
-ENV PORT=5000
-ENV HOST=0.0.0.0
-
-CMD ["python", "main.py"]
+ENV HOST=0.0.0.0 PORT=5050 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+EXPOSE 5050
+CMD ["mcp-web-engine", "--serve"]
