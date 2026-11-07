@@ -3,27 +3,49 @@
 Beta Keys & Telemetry Management CLI for MCP Web Engine
 Genera 20 keys independientes (Beta_001 .. Beta_020), lista y gestiona telemetría por usuario en beta_keys.json.
 """
-import sys
-import os
-import json
-import secrets
-import time
 import argparse
-
+import fcntl
+from functools import wraps
 import hashlib
+import json
+import os
+import secrets
 import tempfile
+import time
 from pathlib import Path
-from src.mcp_web_engine.state_store import beta_keys_path, read_usage
+
+try:
+    from src.mcp_web_engine.state_store import beta_keys_path, read_usage
+except ImportError:  # Direct script execution
+    from state_store import beta_keys_path, read_usage
 
 KEYS_FILE = str(beta_keys_path())
+
+def _locked(operation):
+    @wraps(operation)
+    def wrapped(*args, **kwargs):
+        target = Path(KEYS_FILE)
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        fd = os.open(str(target) + ".lock", os.O_CREAT | os.O_RDWR, 0o600)
+        with os.fdopen(fd, "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            return operation(*args, **kwargs)
+    return wrapped
+
 
 def load_keys():
     if not os.path.exists(KEYS_FILE):
         return {}
     try:
         with open(KEYS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, ValueError) as exc:
+            raw = f.read(1024 * 1024 + 1)
+        if len(raw) > 1024 * 1024:
+            raise ValueError("Key store too large")
+        keys = json.loads(raw)
+        if not isinstance(keys, dict) or any(not isinstance(v, dict) for v in keys.values()):
+            raise ValueError("Invalid key store")
+        return keys
+    except (OSError, ValueError, RecursionError) as exc:
         raise RuntimeError("Cannot read operator key store") from exc
 
 def save_keys(keys):
@@ -42,7 +64,10 @@ def save_keys(keys):
         if temporary and os.path.exists(temporary):
             os.unlink(temporary)
 
+@_locked
 def generate_20_beta_keys():
+    if load_keys():
+        raise RuntimeError("Refusing to replace existing operator keys")
     keys = {}
     generated_summary = []
 
@@ -105,6 +130,7 @@ def list_beta_telemetry():
     print("=" * 85)
     print(f"📈 TOTALES: {len(keys)} Usuarios Beta | {total_reqs} Peticiones Totales | {total_errs} Errores Totales")
 
+@_locked
 def revoke_key_by_id(beta_id):
     keys = load_keys()
     found = False
@@ -112,10 +138,10 @@ def revoke_key_by_id(beta_id):
         if info.get("id") == beta_id or k == beta_id:
             info["status"] = "revoked"
             found = True
-            print(f"🔴 Beta Key '{beta_id}' revocada con éxito.")
             break
     if found:
         save_keys(keys)
+        print(f"🔴 Beta Key '{beta_id}' revocada con éxito.")
     else:
         print(f"❌ Beta Key '{beta_id}' no encontrada.")
 

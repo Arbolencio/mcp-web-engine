@@ -80,8 +80,6 @@ def _connection(path=None):
 def _ensure_row(db, key_id, capacity):
     if db.execute("SELECT 1 FROM usage WHERE key_id=?", (key_id,)).fetchone():
         return
-    if db.execute("SELECT COUNT(*) FROM usage").fetchone()[0] >= capacity:
-        raise AdmissionDenied("RATE_LIMIT_CAPACITY")
     db.execute("INSERT INTO usage(key_id) VALUES (?)", (key_id,))
 
 
@@ -100,8 +98,17 @@ def admit(key_id, rate, *, quota=None, baseline=0, capacity=4096, now=None, path
         if quota is not None and used >= quota:
             raise AdmissionDenied("BETA_QUOTA_EXCEEDED")
         start, count = row["window_started"], row["window_count"]
-        if now - start >= 60:
+        if count == 0 or now - start >= 60:
             start, count = now, 0
+        # Capacity bounds live rate windows, not the lifetime quota ledger.
+        # Historical admissions must remain durable even after a window expires.
+        if row["window_count"] == 0 or now - row["window_started"] >= 60:
+            live = db.execute(
+                "SELECT COUNT(*) FROM usage WHERE window_count > 0 AND window_started > ?",
+                (now - 60,),
+            ).fetchone()[0]
+            if live >= capacity:
+                raise AdmissionDenied("RATE_LIMIT_CAPACITY")
         if count >= rate:
             raise AdmissionDenied("RATE_LIMIT_EXCEEDED")
         db.execute("UPDATE usage SET window_started=?, window_count=?, admissions=? WHERE key_id=?",

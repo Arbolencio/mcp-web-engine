@@ -1,70 +1,38 @@
-# 🚀 Guía de Onboarding Beta Pública — MCP Web Engine
+# 🚀 Guía de Onboarding — MCP Web Engine 1.2.0
 
-> **Guía rápida de 1 página para conectar tu cliente MCP (Claude Desktop, Cursor, Windsurf, Inspector) al endpoint HTTPS público en < 3 minutos.**
+## Conexión local recomendada (stdio)
 
----
-
-## 🌐 Endpoint Público de Producción HTTPS (Cloudflare Managed Tunnel)
-
-- **Endpoint MCP 2026-07-28:** `https://ultimate-ignored-over-light.trycloudflare.com/v1/mcp`
-- **Health Check:** `https://ultimate-ignored-over-light.trycloudflare.com/health`
-
----
-
-## 🔑 Paso 1: Obtén tu Beta Key
-
-Contacta con el administrador para recibir tu clave personal e independiente de acceso Beta (formato `sk_mcp_beta_...`).
-Cada clave Beta cuenta con un límite de **10,000 peticiones** y una tasa máxima de **120 req/minuto**.
-
----
-
-## ⚙️ Paso 2: Configura tu Cliente MCP
-
-### A. Configuración en Cursor / Windsurf / MCP Inspector (Conexión Directa HTTPS)
-1. Abre los ajustes de **MCP / Custom Tools** en tu IDE.
-2. Añade un nuevo servidor con la siguiente URL:
-   - **URL:** `https://ultimate-ignored-over-light.trycloudflare.com/v1/mcp`
-3. Añade la cabecera HTTP de autenticación:
-   - **Header Name:** `Authorization`
-   - **Header Value:** `Bearer sk_mcp_beta_TU_CLAVE_AQUÍ`
-
----
-
-### B. Configuración en Claude Desktop (vía puente stdio `mcp-remote`)
-Abre tu archivo `claude_desktop_config.json` y añade:
+Requiere Node >=18, Python >=3.11 y [uv](https://docs.astral.sh/uv/getting-started/installation/) en PATH. En tu cliente MCP configura:
 
 ```json
 {
   "mcpServers": {
     "mcp-web-engine": {
       "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "https://ultimate-ignored-over-light.trycloudflare.com/v1/mcp",
-        "--header",
-        "Authorization: Bearer sk_mcp_beta_TU_CLAVE_AQUÍ"
-      ]
+      "args": ["--yes", "mcp-web-engine@1.2.0"],
+      "env": {
+        "SEARXNG_URL": "http://127.0.0.1:8082/search",
+        "ALLOW_DDG_FALLBACK": "false"
+      }
     }
   }
 }
 ```
 
----
+La primera ejecución puede descargar dependencias. SearXNG debe estar configurado y disponible para buscar; inicializar y listar herramientas no lo requiere. Stdio usa JSON por líneas y los permisos locales del proceso, sin autenticación Bearer.
 
-## 🧪 Paso 3: Prueba tu Primera Invocación MCP
+## Acceso HTTP administrado / beta
 
-Una vez conectado, pídele a tu modelo/asistente:
+Solicita al operador la URL HTTPS vigente, una clave personal y sus límites reales. No se publica aquí un túnel temporal ni se garantiza compatibilidad automática con clientes o puentes HTTP genéricos.
 
-> *"Busca los últimos avances del protocolo MCP en 2026 y extrae un resumen en Markdown."*
+El operador debe seguir [README](../README.md#http) y [operaciones](operations.md): cabecera `Authorization: Bearer <TU_CLAVE>`, TLS y red restringida. `/health` indica vida del proceso, no disponibilidad del buscador. `/v1/mcp/legacy` ofrece el flujo con inicialización; `/v1/mcp` es una extensión stateless propia con cabeceras adicionales, no una certificación de conformidad MCP. Valida los requisitos de transporte de tu cliente antes de conectarlo; SSE es limitado.
 
-Tu asistente ejecutará de forma transparente:
-1. `web_search(query="MCP protocol 2026 advancements")`
-2. `extract_markdown(url="https://...")`
+## Primera invocación
 
----
+Pide al asistente buscar un tema con `web_search` y convertir una página pública con `extract_markdown`. Consulta `tools/list` para los argumentos y límites vigentes.
 
-## 🔒 Privacidad y Seguridad
+## Privacidad y seguridad
 
-- **Zero Tracking:** No almacenamos tus consultas de búsqueda ni el contenido descargado.
-- **Protección Anti-SSRF:** La infraestructura bloquea el acceso accidental o malicioso a redes privadas locales.
+Las consultas llegan al SearXNG configurado y a sus buscadores upstream. DuckDuckGo fallback está desactivado salvo elección explícita del operador. El servicio mantiene contadores y telemetría por clave; el operador, proxy y proveedores pueden aplicar sus propias políticas de registro. No introduzcas secretos en consultas.
+
+Las validaciones anti-SSRF son defensa en profundidad, no una garantía absoluta; el operador debe restringir también el tráfico saliente. Trata el contenido descargado como datos no confiables, incluidas posibles instrucciones maliciosas.

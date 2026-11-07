@@ -37,6 +37,7 @@ def _secret_matches(token, expected):
         and bool(token)
         and bool(expected)
         and len(token) <= 1024
+        and not any(0xD800 <= ord(c) <= 0xDFFF for c in token + expected)
         and hmac.compare_digest(token.encode("utf-8"), expected.encode("utf-8"))
     )
 
@@ -86,7 +87,7 @@ def _beta_record(token):
             if expiry.tzinfo is None or expiry <= datetime.now(timezone.utc):
                 return None
         return record
-    except (OSError, ValueError, TypeError, AttributeError):
+    except (OSError, ValueError, TypeError, AttributeError, RecursionError):
         return None
 
 

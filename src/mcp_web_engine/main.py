@@ -1,6 +1,7 @@
 """
 Main FastAPI Application Gateway & MCP Protocol Handler (SSE & STDIO Modes)
 """
+import argparse
 import asyncio
 import json
 import os
@@ -65,17 +66,24 @@ async def health_check():
 
 @app.get("/v1/metrics")
 async def get_metrics(api_key: str = Depends(verify_master_api_key)):
-    check_rate_limit(api_key)
+    await asyncio.to_thread(check_rate_limit, api_key)
     return metrics.get_summary()
 
 @app.get("/v1/beta/telemetry")
 async def get_beta_telemetry(api_key: str = Depends(verify_master_api_key)):
-    check_rate_limit(api_key)
+    await asyncio.to_thread(check_rate_limit, api_key)
+    return await asyncio.to_thread(_collect_beta_telemetry)
+
+
+def _collect_beta_telemetry():
     if not os.path.exists(security_module.BETA_KEYS_FILE):
         return {"users_count": 0, "telemetry": {}}
     try:
         with open(security_module.BETA_KEYS_FILE, "r", encoding="utf-8") as f:
-            keys = json.load(f)
+            raw = f.read(1024 * 1024 + 1)
+        if len(raw) > 1024 * 1024:
+            raise ValueError("Credential document too large")
+        keys = json.loads(raw)
         
         summary = {}
         for k, v in keys.items():
@@ -104,7 +112,7 @@ async def mcp_2026_stateless_endpoint(
     mcp_method: Optional[str] = Header(None, alias="Mcp-Method"),
     mcp_name: Optional[str] = Header(None, alias="Mcp-Name")
 ):
-    check_rate_limit(api_key)
+    await asyncio.to_thread(check_rate_limit, api_key)
     try:
         payload = _load_json(await request.body())
     except Exception:
@@ -125,7 +133,7 @@ async def mcp_2026_stateless_endpoint(
         headers["Mcp-Name"] = mcp_name
     
     return Response(
-        content=json.dumps(res_body, ensure_ascii=False) if res_body else "",
+        content=json.dumps(res_body, ensure_ascii=True) if res_body else "",
         status_code=http_status,
         headers=headers
     )
@@ -137,7 +145,7 @@ async def mcp_2025_legacy_endpoint(
     api_key: str = Depends(verify_api_key),
     mcp_session_id: Optional[str] = Header(None, alias="Mcp-Session-Id")
 ):
-    check_rate_limit(api_key)
+    await asyncio.to_thread(check_rate_limit, api_key)
     try:
         payload = _load_json(await request.body())
     except Exception:
@@ -152,7 +160,7 @@ async def mcp_2025_legacy_endpoint(
     }
     
     return Response(
-        content=json.dumps(res_body, ensure_ascii=False) if res_body else "",
+        content=json.dumps(res_body, ensure_ascii=True) if res_body else "",
         status_code=http_status,
         headers=headers
     )
@@ -163,7 +171,7 @@ async def mcp_sse_endpoint(
     request: Request,
     api_key: str = Depends(verify_api_key)
 ):
-    check_rate_limit(api_key)
+    await asyncio.to_thread(check_rate_limit, api_key)
 
     async def event_generator():
         yield {
@@ -176,13 +184,13 @@ async def mcp_sse_endpoint(
 # Legacy REST Tool Listing Endpoint (Compatibility)
 @app.post("/v1/mcp/tools")
 async def list_mcp_tools(api_key: str = Depends(verify_api_key)):
-    check_rate_limit(api_key)
+    await asyncio.to_thread(check_rate_limit, api_key)
     return {"tools": MCP_TOOL_DEFINITIONS}
 
 # Legacy REST Tool Invocation Endpoint (Compatibility)
 @app.post("/v1/mcp/invoke")
 async def invoke_mcp_tool(payload: dict, api_key: str = Depends(verify_api_key)):
-    check_rate_limit(api_key)
+    await asyncio.to_thread(check_rate_limit, api_key)
     tool_name = payload.get("tool")
     arguments = payload.get("arguments", {})
 
@@ -192,23 +200,24 @@ async def invoke_mcp_tool(payload: dict, api_key: str = Depends(verify_api_key))
             detail={"error": "MISSING_TOOL", "message": "Payload must include 'tool' parameter."}
         )
 
-    start_t = time.time()
+    start_t = time.monotonic()
     try:
         res = await handle_mcp_tool_call(tool_name, arguments)
-        lat = round((time.time() - start_t) * 1000, 2)
-        metrics.record(tool_name, lat, success=True, api_key=api_key)
-        return {"tool": tool_name, "status": "success", "result": res}
+        lat = round((time.monotonic() - start_t) * 1000, 2)
+        success = not (isinstance(res, dict) and res.get("error"))
+        await asyncio.to_thread(metrics.record, tool_name, lat, success=success, api_key=api_key)
+        return {"tool": tool_name, "status": "success" if success else "error", "result": res}
     except ValidationError:
-        lat = round((time.time() - start_t) * 1000, 2)
-        metrics.record(tool_name, lat, success=False, api_key=api_key)
+        lat = round((time.monotonic() - start_t) * 1000, 2)
+        await asyncio.to_thread(metrics.record, tool_name, lat, success=False, api_key=api_key)
         raise HTTPException(400, detail={"error": "INVALID_TOOL_ARGUMENTS"}) from None
     except HTTPException as e:
-        lat = round((time.time() - start_t) * 1000, 2)
-        metrics.record(tool_name, lat, success=False, api_key=api_key)
+        lat = round((time.monotonic() - start_t) * 1000, 2)
+        await asyncio.to_thread(metrics.record, tool_name, lat, success=False, api_key=api_key)
         raise e
     except Exception:
-        lat = round((time.time() - start_t) * 1000, 2)
-        metrics.record(tool_name, lat, success=False, api_key=api_key)
+        lat = round((time.monotonic() - start_t) * 1000, 2)
+        await asyncio.to_thread(metrics.record, tool_name, lat, success=False, api_key=api_key)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "TOOL_EXECUTION_ERROR", "message": "Tool execution failed."}
@@ -268,8 +277,13 @@ def cli_entrypoint():
     Console script entrypoint for PyPI / uvx (mcp-web-engine).
     Runs Stdio MCP mode by default; runs FastAPI HTTP server if --serve is passed.
     """
-    is_serve = "--serve" in sys.argv or "--sse" in sys.argv
-    if is_serve:
+    parser = argparse.ArgumentParser(prog="mcp-web-engine", description="Local MCP stdio tools and optional authenticated HTTP gateway.")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--stdio", action="store_true", help="Use JSON-lines stdio (default)")
+    mode.add_argument("--serve", "--sse", dest="serve", action="store_true", help="Run the HTTP gateway; --sse is a compatibility alias")
+    parser.add_argument("--version", action="version", version=__version__)
+    args = parser.parse_args()
+    if args.serve:
         if len(settings.API_KEY.strip()) < 32:
             raise SystemExit("HTTP mode requires an operator-generated API_KEY of at least 32 characters.")
         import uvicorn
