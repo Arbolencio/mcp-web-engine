@@ -1,0 +1,32 @@
+name: npm client compatibility
+on:
+  push:
+  pull_request:
+jobs:
+  installed-npm:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ['18', '22']
+    env:
+      UV_PYTHON: '3.12'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: astral-sh/setup-uv@v6
+      - name: Pack and install the candidate outside checkout
+        shell: bash
+        run: |
+          mkdir -p candidate-dist
+          npm pack --ignore-scripts --pack-destination candidate-dist
+          npm install --prefix "$RUNNER_TEMP/npm install" --ignore-scripts "$PWD"/candidate-dist/*.tgz
+      - name: Exercise installed command shim including paths with spaces
+        shell: bash
+        run: python tests/npm_artifact_smoke.py "$RUNNER_TEMP/npm install"

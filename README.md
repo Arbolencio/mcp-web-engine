@@ -4,6 +4,31 @@ Self-hostable MCP search, public-page fetch and Markdown extraction. Stable publ
 
 Requires Python >=3.11. The optional npm launcher requires Node >=18 and [uv](https://docs.astral.sh/uv/getting-started/installation/) on PATH. Installation resolves dependencies from `pyproject.toml` and may access package indexes. uv isolates Python dependencies; it is not a security sandbox.
 
+## npm quick start
+
+Use this when you want an MCP server without cloning the repository. Requirements: Node >=18 (prefer a maintained Node release), **uv on PATH**, Python >=3.11 (uv can provision it), and a reachable SearXNG instance with JSON search enabled. npm installs the launcher; it does **not** bundle Python or SearXNG. Install uv from [its official instructions](https://docs.astral.sh/uv/getting-started/installation/).
+
+Paste this into your MCP client's server configuration and replace the SearXNG URL with yours:
+
+```json
+{
+  "mcpServers": {
+    "mcp-web-engine": {
+      "command": "npx",
+      "args": ["--yes", "mcp-web-engine@1.2.0"],
+      "env": {
+        "SEARXNG_URL": "http://127.0.0.1:8082/search",
+        "ALLOW_DDG_FALLBACK": "false"
+      }
+    }
+  }
+}
+```
+
+Ready-to-copy files: [Linux/macOS](examples/npm-stdio.json) and [Windows](examples/npm-stdio.windows.json). On Windows the example uses `cmd /c npx` for the npm command shim. The stdio server waits for a client: silence after manually running `npx --yes mcp-web-engine@1.2.0` is normal, not a chat prompt. Initialization lists three tools; a working search backend is needed only when you search. First launch may access package indexes.
+
+**If setup fails:** check `node --version` and `uv --version` in the environment used by the client. Desktop clients may not inherit your interactive shell's PATH; supply the absolute executable path if needed. If tools appear but search fails, verify SearXNG's `/search?q=test&format=json` endpoint returns JSON, not an HTML page or a disabled-JSON error. Local stdio does not need an HTTP API key.
+
 ## Local stdio
 
 ```bash
