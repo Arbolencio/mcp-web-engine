@@ -1,0 +1,233 @@
+{
+  "recorded_at": "2026-11-07T13:13:47.413430+00:00",
+  "command": [
+    "uvx",
+    "--default-index",
+    "https://pypi.org/simple",
+    "mcp-web-engine==1.2.1"
+  ],
+  "transport": "stdio",
+  "source": "live network execution; not mocked",
+  "elapsed_seconds": 3.89,
+  "requests": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "initialize",
+      "params": {
+        "protocolVersion": "2025-11-25",
+        "capabilities": {},
+        "clientInfo": {
+          "name": "recorded-demo",
+          "version": "1"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "notifications/initialized"
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "tools/list"
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "method": "tools/call",
+      "params": {
+        "name": "web_search",
+        "arguments": {
+          "query": "Model Context Protocol documentation",
+          "limit": 3
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "method": "tools/call",
+      "params": {
+        "name": "fetch_url",
+        "arguments": {
+          "url": "https://example.com/"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "method": "tools/call",
+      "params": {
+        "name": "extract_markdown",
+        "arguments": {
+          "url": "https://example.com/"
+        }
+      }
+    }
+  ],
+  "responses": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "protocolVersion": "2025-11-25",
+        "capabilities": {
+          "tools": {
+            "listChanged": false
+          }
+        },
+        "serverInfo": {
+          "name": "mcp-web-engine",
+          "version": "1.2.1"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {
+        "tools": [
+          {
+            "name": "web_search",
+            "description": "Performs aggregate multi-engine web search returning structured search results.",
+            "inputSchema": {
+              "properties": {
+                "query": {
+                  "description": "The search query keywords",
+                  "maxLength": 4096,
+                  "minLength": 2,
+                  "title": "Query",
+                  "type": "string"
+                },
+                "limit": {
+                  "default": 10,
+                  "description": "Max results to return (1-25)",
+                  "maximum": 25,
+                  "minimum": 1,
+                  "title": "Limit",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "query"
+              ],
+              "title": "WebSearchInput",
+              "type": "object"
+            }
+          },
+          {
+            "name": "fetch_url",
+            "description": "Fetches raw text content of a web page after SSRF security checks.",
+            "inputSchema": {
+              "properties": {
+                "url": {
+                  "description": "Target public HTTP(S) URL",
+                  "maxLength": 8192,
+                  "minLength": 1,
+                  "title": "Url",
+                  "type": "string"
+                },
+                "max_bytes": {
+                  "anyOf": [
+                    {
+                      "maximum": 16777216,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "description": "Response byte limit, capped by operator MAX_PAYLOAD_BYTES",
+                  "title": "Max Bytes"
+                }
+              },
+              "required": [
+                "url"
+              ],
+              "title": "FetchUrlInput",
+              "type": "object"
+            }
+          },
+          {
+            "name": "extract_markdown",
+            "description": "Scrapes a web page and converts HTML into clean, structured Markdown for LLMs.",
+            "inputSchema": {
+              "properties": {
+                "url": {
+                  "description": "Target public HTTP(S) URL",
+                  "maxLength": 8192,
+                  "minLength": 1,
+                  "title": "Url",
+                  "type": "string"
+                },
+                "max_bytes": {
+                  "anyOf": [
+                    {
+                      "maximum": 16777216,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "description": "Response byte limit, capped by operator MAX_PAYLOAD_BYTES",
+                  "title": "Max Bytes"
+                }
+              },
+              "required": [
+                "url"
+              ],
+              "title": "ExtractMarkdownInput",
+              "type": "object"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"query\": \"Model Context Protocol documentation\", \"count\": 3, \"latency_ms\": 653.68, \"results\": [{\"rank\": 1, \"title\": \"Introducci\u00f3n al servidor MCP de Microsoft Learn\", \"url\": \"https://learn.microsoft.com/es-es/training/support/mcp\", \"snippet\": \"El servidor de Microsoft Learn Model Context Protocol (MCP) permite a los clientes, como GitHub Copilot y otros agentes de IA, aportar informaci\u00f3n de\u00a0...\", \"engine\": \"google cse\"}, {\"rank\": 2, \"title\": \"Model Context Protocol (MCP): Qu\u00e9 es y c\u00f3mo usarlo paso a paso ...\", \"url\": \"https://adictosaltrabajo.com/2025/05/19/model-context-protocol-mcp-que-es-y-como-usarlo-paso-a-paso-con-ejemplos-en-python/\", \"snippet\": \"19 may 2025 ... Model Context Protocol (MCP), OpenAI, LLM, inteligencia artificial, Est\u00e1ndar, Python, Agentic Application, Agente IA, Workflow.\", \"engine\": \"google cse\"}, {\"rank\": 3, \"title\": \"Introducci\u00f3n al servidor MCP de Microsoft Learn\", \"url\": \"https://learn.microsoft.com/es-es/training/support/mcp-get-started\", \"snippet\": \"Si usa Claude Code o la CLI de GitHub Copilot, puede instalar el microsoft-docs complemento que incluye el servidor MCP de Learn y tres aptitudes de agente que\u00a0...\", \"engine\": \"google cse\"}]}"
+          }
+        ],
+        "isError": false
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"url\": \"https://example.com/\", \"status_code\": 200, \"content_length\": 577, \"latency_ms\": 136.28, \"content\": \"<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\\\"width=device-width,initial-scale=1\\\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\\n\"}"
+          }
+        ],
+        "isError": false
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"url\": \"https://example.com/\", \"status_code\": 200, \"markdown_length\": 157, \"latency_ms\": 160.56, \"markdown\": \"This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.\\n\"}"
+          }
+        ],
+        "isError": false
+      }
+    }
+  ]
+}

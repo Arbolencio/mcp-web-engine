@@ -1,14 +1,55 @@
 # MCP Web Engine
 
-Self-hostable MCP search, public-page fetch and Markdown extraction. Release version: **1.2.1**. Check registry availability before installing a pinned version; source examples below run the checkout.
+[![npm](https://img.shields.io/npm/v/mcp-web-engine)](https://www.npmjs.com/package/mcp-web-engine)
+[![PyPI](https://img.shields.io/pypi/v/mcp-web-engine)](https://pypi.org/project/mcp-web-engine/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/license/mit)
 
-Requires Python >=3.11. The optional npm launcher requires Node >=18 and [uv](https://docs.astral.sh/uv/getting-started/installation/) on PATH. Installation resolves dependencies from `pyproject.toml` and may access package indexes. uv isolates Python dependencies; it is not a security sandbox.
+**Give your MCP client web search, public-page fetching and Markdown extraction through a self-hostable server.** For developers using Claude Desktop, Cursor, VS Code or their own MCP agents who want an operator-controlled SearXNG backend. Current release: **1.2.1**.
+
+Use it to research a question and inspect its sources, fetch public documentation while coding, or turn a public article into Markdown for further analysis. It is not a browser automation service: authenticated pages and JavaScript rendering are outside its scope.
+
+## Tools
+
+| Tool | Arguments | Purpose | Example arguments |
+|---|---|---|---|
+| `web_search` | `query`, optional `limit` | Search through configured SearXNG | `{"query":"Model Context Protocol","limit":3}` |
+| `fetch_url` | `url`, optional `max_bytes` | Fetch a public HTTP(S) page | `{"url":"https://example.com/"}` |
+| `extract_markdown` | `url`, optional `max_bytes` | Convert fetched HTML to Markdown | `{"url":"https://example.com/"}` |
+
+Use `tools/list` for authoritative schemas and bounds.
+
+## Recorded demo (30–60 seconds)
+
+![Recorded MCP stdio tool execution replay](https://raw.githubusercontent.com/Arbolencio/mcp-web-engine/master/docs/assets/demo.gif)
+
+This 35-second replay of **real tool execution** is paced for readability: not a Claude/Cursor UI recording and not a performance benchmark. It shows initialization, tool listing, a live search, public-page fetch and Markdown extraction using public release 1.2.1 over stdio. Replay duration is not execution time. See [the runnable demo](https://github.com/Arbolencio/mcp-web-engine/blob/master/examples/demo.py), [captured JSON exchange](https://github.com/Arbolencio/mcp-web-engine/blob/master/docs/assets/demo-session.json) and [replay renderer](https://github.com/Arbolencio/mcp-web-engine/blob/master/examples/render_demo.py). Recording requires a reachable SearXNG backend for search.
+
+## Use cases
+
+- **Research with sources:** search a topic, inspect result URLs and fetch the pages before summarizing.
+- **Coding with public documentation:** give an agent current documentation text without requiring a browser session.
+- **Prepare Markdown for analysis:** extract readable content from static public HTML for a downstream workflow; review source material before relying on it.
+
+## Prerequisites
+
+- Python **>=3.11** for the server.
+- For npm: Node **>=18** (prefer a maintained release) and **[uv on PATH](https://docs.astral.sh/uv/getting-started/installation/)**. npm installs a launcher, not Python or SearXNG; uv can provision Python.
+- A reachable, operator-controlled **SearXNG instance with JSON search enabled** for `web_search`. The examples use `http://127.0.0.1:8082/search`; change this to your backend. SearXNG is not bundled. Initialization, tool listing and public-page fetch/extraction do not require SearXNG.
+- An MCP-capable client with local stdio support. Approve tools according to your client's trust controls.
+
+Installation resolves Python dependencies and may access package indexes. uv isolates dependencies; it is not a security sandbox. Search queries go to SearXNG and its upstream engines; see [security and privacy](#security-controls-and-limitations).
 
 ## npm quick start
 
 Use this when you want an MCP server without cloning the repository. Requirements: Node >=18 (prefer a maintained Node release), **uv on PATH**, Python >=3.11 (uv can provision it), and a reachable SearXNG instance with JSON search enabled. npm installs the launcher; it does **not** bundle Python or SearXNG. Install uv from [its official instructions](https://docs.astral.sh/uv/getting-started/installation/).
 
-Paste this into your MCP client's server configuration and replace the SearXNG URL with yours:
+Launch the pinned npm release (it waits for a stdio client):
+
+```bash
+npx --yes mcp-web-engine@1.2.1
+```
+
+For actual agent use, paste this into your MCP client's server configuration and replace the SearXNG URL with yours:
 
 ```json
 {
@@ -28,6 +69,49 @@ Paste this into your MCP client's server configuration and replace the SearXNG U
 Ready-to-copy files: [Linux/macOS](examples/npm-stdio.json) and [Windows](examples/npm-stdio.windows.json). On Windows the example uses `cmd /c npx` for the npm command shim. The stdio server waits for a client: silence after manually running `npx --yes mcp-web-engine@1.2.1` is normal, not a chat prompt. Initialization lists three tools; a working search backend is needed only when you search. First launch may access package indexes.
 
 **If setup fails:** check `node --version` and `uv --version` in the environment used by the client. Desktop clients may not inherit your interactive shell's PATH; supply the absolute executable path if needed. If tools appear but search fails, verify SearXNG's `/search?q=test&format=json` endpoint returns JSON, not an HTML page or a disabled-JSON error. Local stdio does not need an HTTP API key.
+
+### Connect your client
+
+**Claude Desktop**
+
+1. Open **Settings → Developer → Edit Config** to locate `claude_desktop_config.json`.
+2. Merge the `mcpServers` entry above into that file (do not overwrite existing servers). Use [the Windows configuration](examples/npm-stdio.windows.json) on Windows or [Linux/macOS configuration](examples/npm-stdio.json) elsewhere.
+3. Save, fully restart Claude Desktop and check the available tools. Ask it to search a topic with `web_search`, then fetch a public result with `fetch_url` or `extract_markdown`; approve calls when prompted.
+
+See the [official local-server guide](https://modelcontextprotocol.io/quickstart/user).
+
+**Cursor**
+
+1. Create `.cursor/mcp.json` in your project, or use `~/.cursor/mcp.json` for your user-wide setup.
+2. Merge the same `mcpServers` configuration above, choosing the Windows example where appropriate.
+3. Open Cursor's MCP settings, enable/reload the server, and check its tool list. In Agent, request a search and approve tool execution if prompted.
+
+See [Cursor's official MCP documentation](https://cursor.com/docs/mcp).
+
+**VS Code**
+
+1. Copy [examples/vscode-mcp.json](examples/vscode-mcp.json) to your workspace's `.vscode/mcp.json`; on Windows use [examples/vscode-mcp.windows.json](examples/vscode-mcp.windows.json).
+2. Set your SearXNG URL. VS Code uses a top-level **`servers`**, not `mcpServers`, and each entry explicitly sets `"type": "stdio"`. Do not paste the Claude/Cursor JSON unchanged.
+3. Use **MCP: List Servers** in the Command Palette to start the server, review the trust prompt, then enable its tools in agent chat. Request a search and inspect the tool result.
+
+See [VS Code's official MCP documentation](https://code.visualstudio.com/docs/agent-customization/mcp-servers). Client versions and organization policies can change available controls.
+
+**Verification scope:** installed npm stdio command shims were tested on Windows/macOS/Linux with Node 18/22. Configuration examples are schema checked; no full end-to-end GUI sessions in Claude Desktop, Cursor or VS Code were tested. A successful stdio smoke test is not proof of a graphical client's integration.
+
+### PyPI installation (without npm)
+
+Use an isolated virtual environment rather than installing into an externally managed system Python (PEP 668):
+
+```bash
+python -m venv .venv
+# Linux/macOS:
+. .venv/bin/activate
+# Windows PowerShell instead: .venv\Scripts\Activate.ps1
+python -m pip install "mcp-web-engine==1.2.1"
+mcp-web-engine --version
+```
+
+In your client configuration, replace `command` with the absolute path to `.venv/bin/mcp-web-engine` (Windows: `.venv\Scripts\mcp-web-engine.exe`) and use `"args": []`; keep the backend environment settings. Escape Windows backslashes as `\\` inside JSON. This route needs Python and pip, not Node or uv. The same SearXNG requirements apply. Alternatively, with uv installed: `uvx --from mcp-web-engine==1.2.1 mcp-web-engine`.
 
 ## Local stdio
 
@@ -71,16 +155,6 @@ HTTP defaults to `127.0.0.1:5050`; `API_KEY` must contain at least 32 non-whites
 
 `POST /v1/mcp/legacy` provides the initialize-based compatibility path. `/v1/mcp` is a project-specific stateless extension requiring `Mcp-Method` (and `Mcp-Name` for tool calls). Its `2026-07-28` label is an internal extension identifier, **not a claim of official MCP conformance**. SSE support is limited; this is not a complete implementation of every MCP transport or optional feature.
 
-## Tools
-
-| Tool | Arguments | Purpose |
-|---|---|---|
-| `web_search` | `query`, optional `limit` | Search through configured SearXNG |
-| `fetch_url` | `url`, optional `max_bytes` | Fetch a public HTTP(S) page |
-| `extract_markdown` | `url`, optional `max_bytes` | Convert fetched HTML to Markdown |
-
-Use `tools/list` for authoritative schemas and bounds.
-
 ## Configuration
 
 Process environment is authoritative. CWD `.env` files are **not** loaded automatically. To explicitly load one, set `MCP_WEB_ENGINE_ENV_FILE` to an existing **absolute** file path; process variables override file values.
@@ -115,6 +189,8 @@ Public fetches validate schemes, resolved addresses and redirects, rejecting loo
 
 SearXNG is an intentional trusted-backend exception to public-fetch restrictions and can use a private address. Its operator and upstream engines receive queries; self-hosting does not keep searches entirely on-host. DuckDuckGo fallback is off by default, but ordinary SearXNG searches still involve upstream services. Fetched pages are untrusted input and may contain prompt injection. Dependency isolation does not isolate filesystem/network access. HTTP authentication is not TLS or a multi-host distributed rate limiter; use a restricted network and a TLS reverse proxy when needed. Do not expose the service directly to the Internet.
 
+HTTP mode persists admission counters and tool telemetry keyed by hashed key IDs in local SQLite; operator-managed JSON credentials are stored separately. Self-hosting is not a promise of no logging or no disk writes: review logging, state paths, retention and filesystem permissions before handling sensitive workloads. See [operations and limitations](docs/operations.md).
+
 ## Development and artifact verification
 
 ```bash
@@ -126,5 +202,7 @@ python3 tests/artifact_smoke.py -- uv tool run --from /absolute/path/to/package.
 ```
 
 Tests are offline by default. The artifact smoke sends no search query: initialize, silent notification, ping, tool listing, and a rejected loopback fetch. CI tests Python 3.11–3.13 and builds/installs wheel and npm artifacts outside the checkout. Package dependency installation still requires package-index access unless cached.
+
+## License
 
 MIT License. See [LICENSE](LICENSE).
