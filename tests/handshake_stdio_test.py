@@ -23,7 +23,7 @@ def smoke(command=None):
     replies = [json.loads(line) for line in result.stdout.splitlines()]
     assert [r['id'] for r in replies] == [1, 2, 3, 4], result.stdout
     assert replies[0]['result']['protocolVersion'] == '2024-11-05'
-    assert replies[0]['result']['serverInfo']['version'] == '1.2.0'
+    assert replies[0]['result']['serverInfo']['version'] == '1.2.1'
     assert {t['name'] for t in replies[1]['result']['tools']} == {'web_search', 'fetch_url', 'extract_markdown'}
     assert replies[2]['result'] == {}
     assert replies[3]['result']['isError'] is True

@@ -23,7 +23,7 @@ def test_public_onboarding_has_no_stale_endpoint_or_privacy_guarantee():
     assert "trycloudflare.com" not in content
     assert "Zero Tracking" not in content
     assert "Endpoint MCP 2026-07-28" not in content
-    assert "mcp-web-engine@1.2.0" in content
+    assert "mcp-web-engine@1.2.1" in content
     assert "SearXNG" in content
 
 

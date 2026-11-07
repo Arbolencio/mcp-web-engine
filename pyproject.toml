@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-web-engine"
-version = "1.2.0"
+version = "1.2.1"
 description = "Self-hostable MCP search, public-page fetch and Markdown extraction"
 readme = "README.md"
 requires-python = ">=3.11"

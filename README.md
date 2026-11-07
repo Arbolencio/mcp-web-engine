@@ -1,6 +1,6 @@
 # MCP Web Engine
 
-Self-hostable MCP search, public-page fetch and Markdown extraction. Stable public release: **1.2.0** on PyPI and npm; source examples below run the checkout.
+Self-hostable MCP search, public-page fetch and Markdown extraction. Release version: **1.2.1**. Check registry availability before installing a pinned version; source examples below run the checkout.
 
 Requires Python >=3.11. The optional npm launcher requires Node >=18 and [uv](https://docs.astral.sh/uv/getting-started/installation/) on PATH. Installation resolves dependencies from `pyproject.toml` and may access package indexes. uv isolates Python dependencies; it is not a security sandbox.
 
@@ -15,7 +15,7 @@ Paste this into your MCP client's server configuration and replace the SearXNG U
   "mcpServers": {
     "mcp-web-engine": {
       "command": "npx",
-      "args": ["--yes", "mcp-web-engine@1.2.0"],
+      "args": ["--yes", "mcp-web-engine@1.2.1"],
       "env": {
         "SEARXNG_URL": "http://127.0.0.1:8082/search",
         "ALLOW_DDG_FALLBACK": "false"
@@ -25,7 +25,7 @@ Paste this into your MCP client's server configuration and replace the SearXNG U
 }
 ```
 
-Ready-to-copy files: [Linux/macOS](examples/npm-stdio.json) and [Windows](examples/npm-stdio.windows.json). On Windows the example uses `cmd /c npx` for the npm command shim. The stdio server waits for a client: silence after manually running `npx --yes mcp-web-engine@1.2.0` is normal, not a chat prompt. Initialization lists three tools; a working search backend is needed only when you search. First launch may access package indexes.
+Ready-to-copy files: [Linux/macOS](examples/npm-stdio.json) and [Windows](examples/npm-stdio.windows.json). On Windows the example uses `cmd /c npx` for the npm command shim. The stdio server waits for a client: silence after manually running `npx --yes mcp-web-engine@1.2.1` is normal, not a chat prompt. Initialization lists three tools; a working search backend is needed only when you search. First launch may access package indexes.
 
 **If setup fails:** check `node --version` and `uv --version` in the environment used by the client. Desktop clients may not inherit your interactive shell's PATH; supply the absolute executable path if needed. If tools appear but search fails, verify SearXNG's `/search?q=test&format=json` endpoint returns JSON, not an HTML page or a disabled-JSON error. Local stdio does not need an HTTP API key.
 
@@ -55,9 +55,9 @@ Client configuration (replace the absolute checkout path):
 }
 ```
 
-For a pinned public installation use `uvx --from mcp-web-engine==1.2.0 mcp-web-engine` or `npx --yes mcp-web-engine@1.2.0`. These pin the project version, not its transitive dependencies. The clone above follows the repository default branch, not a release pin; use a reviewed commit and `uv sync --locked` for source deployments.
+For a pinned public installation use `uvx --from mcp-web-engine==1.2.1 mcp-web-engine` or `npx --yes mcp-web-engine@1.2.1`. These pin the project version, not its transitive dependencies. The clone above follows the repository default branch, not a release pin; use a reviewed commit and `uv sync --locked` for source deployments.
 
-The npm tarball includes the canonical Python src package and build metadata. `npx --package /absolute/path/mcp-web-engine-1.2.0.tgz mcp-web-engine` delegates to uv; Python/uv remain prerequisites, and first launch may need network access for dependencies.
+The npm tarball includes the canonical Python src package and build metadata. `npx --package /absolute/path/mcp-web-engine-1.2.1.tgz mcp-web-engine` delegates to uv; Python/uv remain prerequisites, and first launch may need network access for dependencies.
 
 ## HTTP
 

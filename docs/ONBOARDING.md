@@ -1,4 +1,4 @@
-# 🚀 Guía de Onboarding — MCP Web Engine 1.2.0
+# 🚀 Guía de Onboarding — MCP Web Engine 1.2.1
 
 ## Conexión local recomendada (stdio)
 
@@ -9,7 +9,7 @@ Requiere Node >=18, Python >=3.11 y [uv](https://docs.astral.sh/uv/getting-start
   "mcpServers": {
     "mcp-web-engine": {
       "command": "npx",
-      "args": ["--yes", "mcp-web-engine@1.2.0"],
+      "args": ["--yes", "mcp-web-engine@1.2.1"],
       "env": {
         "SEARXNG_URL": "http://127.0.0.1:8082/search",
         "ALLOW_DDG_FALLBACK": "false"

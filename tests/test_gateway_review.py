@@ -15,7 +15,7 @@ from mcp_web_engine.config import settings
 from mcp_web_engine.resource_limits import RequestSizeLimitMiddleware
 
 
-@pytest.mark.parametrize('flag,expected', [('--help', 'usage:'), ('--version', '1.2.0')])
+@pytest.mark.parametrize('flag,expected', [('--help', 'usage:'), ('--version', '1.2.1')])
 def test_cli_informational_flags(flag, expected):
     result = subprocess.run([sys.executable, '-m', 'mcp_web_engine.main', flag], input='', capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
