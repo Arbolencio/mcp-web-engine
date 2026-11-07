@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_npm_ships_canonical_python_package():
     package = json.loads((ROOT / "package.json").read_text())
-    assert package["version"] == "1.2.0"
+    assert package["version"] == "1.2.1"
     assert {"src/mcp_web_engine/*.py", "pyproject.toml"} <= set(package["files"])
     assert "*.py" not in package["files"]
 

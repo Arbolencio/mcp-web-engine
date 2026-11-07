@@ -1,6 +1,7 @@
 """JSON-RPC handlers. The custom stateless API is retained for compatibility;
 its extensions are not claimed to be a certified official MCP implementation.
 """
+import asyncio
 import hashlib
 import json
 import secrets
@@ -98,7 +99,7 @@ async def _tool_result(request_id, params, api_key):
         logger.error('MCP tool execution failed', extra={'extra_data': {'tool': name, 'exception_type': type(exc).__name__}})
         return make_jsonrpc_response(request_id, {'content': [{'type': 'text', 'text': text}], 'isError': True}), 200
     finally:
-        metrics.record(name, round((time.monotonic() - start) * 1000, 2), success=success, api_key=api_key)
+        await asyncio.to_thread(metrics.record, name, round((time.monotonic() - start) * 1000, 2), success=success, api_key=api_key)
 
 
 def is_rpc_notification(payload):

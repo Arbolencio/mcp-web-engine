@@ -24,7 +24,14 @@ jobs:
           uv pip install --python .venv/bin/python build twine
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - name: Offline default tests (no live search service)
-        run: python -m pytest -q
+        run: python -m pytest -q --junitxml=test-results/pytest.xml
+      - name: Preserve test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-python-${{ matrix.python }}
+          path: test-results/pytest.xml
+          if-no-files-found: error
       - name: Build and inspect distributions
         run: |
           python -m build
@@ -45,3 +52,4 @@ jobs:
         with:
           name: distributions-python-${{ matrix.python }}
           path: dist/*
+          if-no-files-found: error

@@ -19,7 +19,10 @@ class JSONFormatter(logging.Formatter):
         r"(?:password|token|secret|api[_-]?key|authorization|cookie)\s*[:=]\s*\S+)", re.I)
 
     def _text(self, value):
-        value = str(value)
+        if not isinstance(value, str):
+            return "[REDACTED_OBJECT]"
+        if len(value) > 8192:
+            return "[TRUNCATED]"
         master = settings.API_KEY
         if isinstance(master, str) and master:
             value = value.replace(master, "[REDACTED]")
@@ -30,7 +33,24 @@ class JSONFormatter(logging.Formatter):
 
     def format(self, record):
         try:
-            message = "Operation failed" if record.exc_info else self._text(record.getMessage())
+            if record.exc_info:
+                message = "Operation failed"
+            elif not isinstance(record.msg, str):
+                message = "[REDACTED_OBJECT]"
+            elif len(record.msg) > 8192 or re.search(
+                r"%(?:\([^)]*\))?[-+#0 .\d]*(?:\*|\d{5})", record.msg
+            ):
+                message = "[TRUNCATED]"
+            else:
+                args = record.args.values() if isinstance(record.args, dict) else (record.args or ())
+                if len(args) > 100:
+                    message = "[TRUNCATED]"
+                elif any(type(v) not in (str, int, float, bool, type(None)) for v in args):
+                    message = "[REDACTED_OBJECT]"
+                elif any(isinstance(v, str) and len(v) > 8192 for v in args):
+                    message = "[TRUNCATED]"
+                else:
+                    message = self._text(record.getMessage())
         except Exception:
             message = "Unformattable log message"
         log_obj: dict[str, Any] = {
@@ -43,14 +63,28 @@ class JSONFormatter(logging.Formatter):
             log_obj["extra"] = self.sanitize_data(record.extra_data)
         return json.dumps(log_obj, allow_nan=False)
 
-    def sanitize_data(self, data, _depth=0):
-        if _depth >= 8:
+    def sanitize_data(self, data, _depth=0, _budget=None):
+        if _budget is None:
+            _budget = [200]
+        _budget[0] -= 1
+        if _depth >= 8 or _budget[0] < 0:
             return "[TRUNCATED]"
         if isinstance(data, dict):
-            return {self._text(k): "REDACTED" if self._sensitive_key.search(str(k))
-                    else self.sanitize_data(v, _depth + 1) for k, v in list(data.items())[:100]}
+            from itertools import islice
+            result = {}
+            for k, v in islice(data.items(), 100):
+                if _budget[0] <= 0:
+                    break
+                key = self._text(k)
+                result[key] = "REDACTED" if self._sensitive_key.search(key) else self.sanitize_data(v, _depth + 1, _budget)
+            return result
         if isinstance(data, (list, tuple)):
-            return [self.sanitize_data(v, _depth + 1) for v in data[:100]]
+            result = []
+            for v in data[:100]:
+                if _budget[0] <= 0:
+                    break
+                result.append(self.sanitize_data(v, _depth + 1, _budget))
+            return result
         if data is None or type(data) in (bool, int):
             return data
         if isinstance(data, str):

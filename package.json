@@ -1,6 +1,6 @@
 {
   "name": "mcp-web-engine",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Self-hostable MCP search, public-page fetch and Markdown extraction",
   "main": "bin/cli.js",
   "bin": {
@@ -16,13 +16,19 @@
     "docs/operations.md",
     "requirements.txt",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "examples/*.json"
   ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Arbolencio/mcp-web-engine.git"
   },
+  "homepage": "https://github.com/Arbolencio/mcp-web-engine#readme",
+  "bugs": {"url": "https://github.com/Arbolencio/mcp-web-engine/issues"},
   "keywords": [
+    "model-context-protocol",
+    "markdown-extraction",
+    "self-hosted",
     "mcp",
     "mcp-server",
     "searxng",

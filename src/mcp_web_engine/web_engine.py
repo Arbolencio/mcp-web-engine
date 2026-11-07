@@ -5,7 +5,6 @@ Core Web Engine Module: SearXNG Connector with DuckDuckGo Direct Fallback, SSRF-
 import asyncio
 import json
 import logging
-import re
 import time
 import urllib.parse
 
@@ -37,32 +36,63 @@ def get_headers():
     }
 
 
+def _validate_search(query, limit):
+    if not isinstance(query, str) or not 2 <= len(query) <= 4096 or not query.strip():
+        raise HTTPException(400, detail={"error": "INVALID_QUERY"})
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 25:
+        raise HTTPException(400, detail={"error": "INVALID_LIMIT"})
+
+
+def _safe_link(value, base=None):
+    """Validate link syntax without DNS/network; fetching still applies SSRF policy."""
+    if not isinstance(value, str) or not value:
+        return None
+    if "\\" in value or any(ord(c) <= 32 or ord(c) == 127 for c in value):
+        return None
+    try:
+        url = urllib.parse.urljoin(base, value) if base else value
+        return _parse_http_url(url)[0]
+    except (HTTPException, ValueError, TypeError):
+        return None
+
+
 async def execute_ddg_fallback(query: str, limit: int = 10):
     """
     Direct DuckDuckGo HTML Search Fallback if SearXNG is unavailable.
     """
+    _validate_search(query, limit)
     start_t = time.time()
-    ddg_url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+    ddg_url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query, safe='')}"
     try:
         r, body, _ = await _bounded_request(ddg_url, _payload_limit(), timeout=8)
         if r.status_code == 200:
             soup = BeautifulSoup(_decode_body(r, body), "html.parser")
             results = []
-            for idx, a in enumerate(soup.find_all("a", class_="result__a")[:limit]):
+            for a in soup.find_all("a", class_="result__a"):
                 title = a.get_text(strip=True)
                 raw_href = a.get("href", "")
-                # Extract target URL from DDG redirect
-                match = re.search(r"uddg=(https?%3A%2F%2F[^&]+)", raw_href)
-                final_url = urllib.parse.unquote(match.group(1)) if match else raw_href
+                # Decode only a real DDG wrapper, exactly once. Keep percent
+                # escapes inside the target path/query intact.
+                try:
+                    wrapper = urllib.parse.urlsplit(urllib.parse.urljoin(ddg_url, raw_href))
+                    if wrapper.hostname in ("duckduckgo.com", "html.duckduckgo.com") and wrapper.path == "/l/":
+                        raw_href = urllib.parse.parse_qs(wrapper.query).get("uddg", [""])[0]
+                except (ValueError, TypeError):
+                    continue
+                final_url = _safe_link(raw_href)
+                if final_url is None:
+                    continue
                 results.append(
                     {
-                        "rank": idx + 1,
+                        "rank": len(results) + 1,
                         "title": title,
                         "url": final_url,
                         "snippet": f"Search result for '{query}'",
                         "engine": "duckduckgo_fallback",
                     }
                 )
+                if len(results) == limit:
+                    break
             return {
                 "query": query,
                 "count": len(results),
@@ -72,40 +102,51 @@ async def execute_ddg_fallback(query: str, limit: int = 10):
     except (HTTPException, ValueError, TypeError, AttributeError) as exc:
         logger.warning("DuckDuckGo fallback unavailable (%s)", type(exc).__name__)
 
-    return {"query": query, "count": 0, "latency_ms": 0, "results": []}
+    return {"query": query, "count": 0, "latency_ms": 0, "results": [], "error": "DDG_UNAVAILABLE"}
 
 
 def normalize_searxng_url(base_url: str) -> str:
-    url = base_url.rstrip("/")
-    if not url.endswith("/search"):
-        url = f"{url}/search"
-    return url
+    parts = urllib.parse.urlsplit(base_url)
+    path = parts.path.rstrip("/")
+    if not path.endswith("/search"):
+        path += "/search"
+    return urllib.parse.urlunsplit(parts._replace(path=path, fragment=""))
 
 
 async def execute_web_search(query: str, limit: int = 10):
+    _validate_search(query, limit)
     start_t = time.time()
-    base_searxng = normalize_searxng_url(settings.SEARXNG_URL)
-    query_params = urllib.parse.urlencode({"q": query, "format": "json"})
-    url = f"{base_searxng}?{query_params}"
 
     try:
+        parts = urllib.parse.urlsplit(normalize_searxng_url(settings.SEARXNG_URL))
+        params = [(k, v) for k, v in urllib.parse.parse_qsl(parts.query, keep_blank_values=True) if k not in ("q", "format")]
+        params.extend((("q", query), ("format", "json")))
+        url = urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(params)))
         r, body, _ = await _bounded_request(
             url, _payload_limit(), trusted_search=True, timeout=4.0
         )
         if r.status_code == 200:
             data = json.loads(_decode_body(r, body))
-            results = data.get("results", [])[:limit]
+            if not isinstance(data, dict) or data.get("error") or not isinstance(data.get("results"), list):
+                raise ValueError("Invalid search response")
             items = []
-            for idx, item in enumerate(results):
+            for item in data["results"]:
+                if not isinstance(item, dict):
+                    continue
+                item_url = _safe_link(item.get("url"))
+                if item_url is None or any(item.get(k) is not None and not isinstance(item[k], str) for k in ("title", "content", "engine")):
+                    continue
                 items.append(
                     {
-                        "rank": idx + 1,
+                        "rank": len(items) + 1,
                         "title": item.get("title"),
-                        "url": item.get("url"),
+                        "url": item_url,
                         "snippet": item.get("content"),
                         "engine": item.get("engine"),
                     }
                 )
+                if len(items) == limit:
+                    break
             return {
                 "query": query,
                 "count": len(items),
@@ -264,6 +305,13 @@ async def execute_fetch_url(url: str, max_bytes: int | None = None):
                 "message": f"Target server returned HTTP status {r.status_code}.",
             },
         )
+    content_type = r.headers.get("Content-Type", r.headers.get("content-type", "")).split(";", 1)[0].strip().lower()
+    if content_type and not (
+        content_type.startswith("text/")
+        or content_type in ("application/json", "application/xml", "application/xhtml+xml")
+        or content_type.endswith(("+json", "+xml"))
+    ):
+        raise HTTPException(415, detail={"error": "UNSUPPORTED_CONTENT_TYPE"})
     content = _decode_body(r, body)
     if not content or len(content.strip()) < 10:
         raise HTTPException(
@@ -290,6 +338,13 @@ async def execute_extract_markdown(url: str, max_bytes: int | None = None):
         soup = BeautifulSoup(html_content, "html.parser")
         for tag in soup(["script", "style", "nav", "footer", "iframe"]):
             tag.decompose()
+
+        for anchor in soup.find_all("a", href=True):
+            safe_url = _safe_link(anchor["href"], fetch_res["url"])
+            if safe_url is None:
+                del anchor["href"]
+            else:
+                anchor["href"] = safe_url
 
         h = html2text.HTML2Text()
         h.ignore_links = False

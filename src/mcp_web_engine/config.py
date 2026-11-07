@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     DEFAULT_TIMEOUT_SEC: float = Field(default=10.0, gt=0, le=120, allow_inf_nan=False, description="Default HTTP request timeout in seconds")
     MAX_PAYLOAD_BYTES: int = Field(default=2 * 1024 * 1024, ge=1, le=16 * 1024 * 1024, description="Max payload size limit (2 MB)")
 
+    # Per-process concurrency and absolute HTTP body-read deadline.
+    MAX_CONCURRENT_REQUESTS: int = Field(default=16, ge=1, le=512)
+    REQUEST_BODY_TIMEOUT_SEC: float = Field(default=10.0, gt=0, le=120, allow_inf_nan=False)
+
     # Privacy: the DuckDuckGo HTML fallback is deliberately opt-in, so that a query
     # never leaves the host unless the operator explicitly allows it.
     ALLOW_DDG_FALLBACK: bool = Field(default=False, description="Fall back to html.duckduckgo.com when SearXNG is unavailable (privacy trade-off, off by default)")

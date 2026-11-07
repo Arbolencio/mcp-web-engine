@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "mcp-web-engine": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "--yes",
+        "mcp-web-engine@1.2.1"
+      ],
+      "env": {
+        "SEARXNG_URL": "http://127.0.0.1:8082/search",
+        "ALLOW_DDG_FALLBACK": "false"
+      }
+    }
+  }
+}
