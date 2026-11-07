@@ -1,0 +1,47 @@
+name: Tests and installed artifacts
+on:
+  push:
+  pull_request:
+jobs:
+  offline-and-artifacts:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: astral-sh/setup-uv@v6
+      - name: Install test and build dependencies
+        run: |
+          uv sync --locked --extra test
+          uv pip install --python .venv/bin/python build twine
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Offline default tests (no live search service)
+        run: python -m pytest -q
+      - name: Build and inspect distributions
+        run: |
+          python -m build
+          python -m twine check dist/*
+          npm pack --pack-destination dist
+      - name: Install wheel outside checkout and exercise stdio
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/wheel-venv"
+          "$RUNNER_TEMP/wheel-venv/bin/python" -m pip install dist/*.whl
+          python tests/artifact_smoke.py -- "$RUNNER_TEMP/wheel-venv/bin/mcp-web-engine"
+      - name: Install npm artifact outside checkout and exercise uv launcher
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/npm-install" --ignore-scripts "$PWD"/dist/*.tgz
+          UV_PYTHON="$(command -v python)" python tests/artifact_smoke.py -- "$RUNNER_TEMP/npm-install/node_modules/.bin/mcp-web-engine"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions-python-${{ matrix.python }}
+          path: dist/*

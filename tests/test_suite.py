@@ -1,22 +1,27 @@
 """
 Comprehensive Test Suite for Spec 2026-07-28 Header Validation & Cache Metadata
 """
+from unittest.mock import AsyncMock
+
 import pytest
 from fastapi.testclient import TestClient
-import os
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from main import app
-from config import settings
-from security import rate_limit_records
+from mcp_web_engine.config import settings
+from mcp_web_engine.main import app
+from mcp_web_engine.security import rate_limit_records
 
 client = TestClient(app)
-AUTH_HEADERS = {"Authorization": f"Bearer {settings.API_KEY}"}
+TEST_KEY = 'synthetic-master-' + 'x' * 40
+AUTH_HEADERS = {"Authorization": f"Bearer {TEST_KEY}"}
 
-def setup_function(function):
+
+@pytest.fixture(autouse=True)
+def isolated_operator(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, 'API_KEY', TEST_KEY)
+    monkeypatch.setenv('MCP_WEB_ENGINE_STATE_DB', str(tmp_path / 'usage.sqlite3'))
     rate_limit_records.clear()
+    # Test the protocol, not a live search provider or operator configuration.
+    monkeypatch.setattr('mcp_web_engine.mcp_tools.execute_web_search', AsyncMock(return_value={'query': 'Python', 'count': 0, 'results': []}))
 
 def test_health():
     res = client.get("/health")
@@ -89,7 +94,7 @@ def test_tools_list_cache_metadata():
     assert "tools" in res_data
     assert res_data["cacheScope"] == "global"
     assert res_data["ttlMs"] == 3600000
-    assert res_data["listChanged"] == False
+    assert res_data["listChanged"] is False
 
 def test_tools_call_with_headers():
     headers = {**AUTH_HEADERS, "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": "tools/call", "Mcp-Name": "web_search"}
@@ -98,7 +103,7 @@ def test_tools_call_with_headers():
     assert res.status_code == 200
     assert res.headers.get("Mcp-Method") == "tools/call"
     assert res.headers.get("Mcp-Name") == "web_search"
-    assert res.json()["result"]["isError"] == False
+    assert res.json()["result"]["isError"] is False
 
 def test_legacy_endpoint_unmodified():
     headers = {**AUTH_HEADERS}
