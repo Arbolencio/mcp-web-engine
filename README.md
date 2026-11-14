@@ -8,6 +8,25 @@
 
 Use it to research a question and inspect its sources, fetch public documentation while coding, or turn a public article into Markdown for further analysis. It is not a browser automation service: authenticated pages and JavaScript rendering are outside its scope.
 
+## Contents
+
+- [Tools](#tools)
+- [Recorded demo](#recorded-demo)
+- [Use cases](#use-cases)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [npm quick start and client setup](#npm-quick-start)
+- [PyPI installation](#pypi-installation-without-npm)
+- [Local stdio](#local-stdio)
+- [HTTP](#http)
+- [Configuration](#configuration)
+- [Docker and local stack](#docker)
+- [Troubleshooting](#troubleshooting)
+- [Security controls and limitations](#security-controls-and-limitations)
+- [Development and artifact verification](#development-and-artifact-verification)
+- [Contributing and security reports](#contributing-and-security-reports)
+- [License](#license)
+
 ## Tools
 
 | Tool | Arguments | Purpose | Example arguments |
@@ -17,6 +36,8 @@ Use it to research a question and inspect its sources, fetch public documentatio
 | `extract_markdown` | `url`, optional `max_bytes` | Convert fetched HTML to Markdown | `{"url":"https://example.com/"}` |
 
 Use `tools/list` for authoritative schemas and bounds.
+
+<a id="recorded-demo"></a>
 
 ## Recorded demo (30–60 seconds)
 
@@ -29,6 +50,21 @@ This 35-second replay of **real tool execution** is paced for readability: not a
 - **Research with sources:** search a topic, inspect result URLs and fetch the pages before summarizing.
 - **Coding with public documentation:** give an agent current documentation text without requiring a browser session.
 - **Prepare Markdown for analysis:** extract readable content from static public HTML for a downstream workflow; review source material before relying on it.
+
+## Architecture
+
+![Request paths: web_search uses the trusted SearXNG backend; fetch_url and extract_markdown validate and pin public destinations before fetching pages.](docs/assets/architecture.svg)
+
+`web_search` sends queries to the operator-configured SearXNG backend, which may
+use a private address. SearXNG and its upstream engines receive those queries.
+`fetch_url` and `extract_markdown` use the public-fetch path: canonical URL
+validation, public-address checks, validated-address connection pinning and
+redirect revalidation. These paths have separate trust boundaries.
+
+Local stdio clients initialize before using tools. HTTP includes an
+initialize-based compatibility route and a project-specific stateless route;
+see [HTTP](#http) for transport limitations. The diagram shows outbound request
+paths, not a guarantee of complete MCP transport compliance or network isolation.
 
 ## Prerequisites
 
@@ -188,6 +224,23 @@ docker compose up --build -d
 
 The image installs the Python package, runs as a non-root user and explicitly starts `mcp-web-engine --serve` on port 5050. Compose publishes **only host loopback**. Container `HOST=0.0.0.0` is necessary for that port mapping; do not confuse it with the host binding. Set `SEARXNG_URL` to a reachable backend: compose defaults to `http://host.docker.internal:8082/search`, using the host gateway. An instance bound only to host loopback may not be reachable from Docker. No SearXNG instance or credentials are bundled. See [operations and limitations](docs/operations.md).
 
+## Troubleshooting
+
+| Symptom | What to check |
+|---|---|
+| The stdio command starts but prints nothing | It is waiting for an MCP client to send JSON-RPC messages. Connect it through your client's server configuration. |
+| The client reports `ENOENT` or cannot find `uv`, `uvx` or `npx` | Check the executable in the client's environment. GUI clients may have a different `PATH`; use an absolute executable path when needed. |
+| Tools appear, but search returns `SEARXNG_UNAVAILABLE` | Check that your SearXNG `/search?q=test&format=json` returns a JSON object with a `results` array. Verify the backend address, JSON configuration, network access and service logs. |
+| A container cannot reach SearXNG | Container loopback refers to that container. Use a reachable host gateway or a shared Docker network; the host service must listen on an address reachable from that network. `host.docker.internal` alone does not expose a loopback-only host service. The [local stack](docs/local-stack.md) connects by service name. |
+| The local stack cannot bind a host port | Set `LOCAL_SEARXNG_PORT` or `LOCAL_MCP_PORT` to a free port and update host-side clients/probes. This includes conflicts with local model servers. See the [local stack guide](docs/local-stack.md). |
+| HTTP startup rejects the API key, or a protected request returns 401 | `--serve` requires an operator-generated key of at least 32 non-whitespace characters. Use the same key in the `Authorization: Bearer` header. Local stdio does not need it. |
+| Changes to a working-directory `.env` have no effect | Set `MCP_WEB_ENGINE_ENV_FILE` to an existing absolute file path, or export variables in the server process's environment. Process variables take precedence. Compose separately reads `.env` for interpolation. |
+| `/health` passes but search fails | Health checks report liveness. Use the [local stack live probe](docs/local-stack.md#verify-the-setup) to check actual search, fetching and extraction. |
+| A public-fetch tool rejects a local or private URL | This is expected SSRF policy. The trusted SearXNG backend is a separate path; its private address does not permit tools to fetch arbitrary private URLs. |
+
+For client JSON examples, see [client setup](#connect-your-client). For state
+permissions, persistence and deployment boundaries, see [operations](docs/operations.md).
+
 ## Security controls and limitations
 
 Public fetches validate schemes, resolved addresses and redirects, rejecting loopback/private/reserved destinations. Bounded payloads, timeouts and tool argument validation reduce resource exposure. These are defense-in-depth controls, not a guarantee against all SSRF, DNS, routing, proxy or upstream failures; enforce outbound network policy independently.
@@ -207,6 +260,12 @@ python3 tests/artifact_smoke.py -- uv tool run --from /absolute/path/to/package.
 ```
 
 Tests are offline by default. The artifact smoke sends no search query: initialize, silent notification, ping, tool listing, and a rejected loopback fetch. CI tests Python 3.11–3.13 and builds/installs wheel and npm artifacts outside the checkout. Package dependency installation still requires package-index access unless cached.
+
+## Contributing and security reports
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, test
+requirements and distribution checks. Follow [SECURITY.md](SECURITY.md) to report
+a suspected vulnerability.
 
 ## License
 
