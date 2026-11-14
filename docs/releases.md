@@ -72,17 +72,26 @@ tag with publishing enabled:
 gh workflow run release.yml --repo Arbolencio/mcp-web-engine --ref v1.2.2 -f publish=true
 ```
 
-The workflow runs only against stable `vX.Y.Z` tags in this repository. It checks
-all three versions, the tag/commit identity and ancestry on `master`, runs the
-offline suite, builds Python/npm archives and tests the installed archives. The
-two publishing jobs upload exactly those archives; neither receives permanent
-registry credentials. npm publishing uses a pinned CLI with OIDC support.
+The workflow checks stable `vX.Y.Z` tags, all three versions, tag/commit identity
+and ancestry on `master`, runs the offline suite, builds Python/npm archives and
+tests the installed archives. The two publishing jobs upload exactly those
+archives; neither receives permanent registry credentials. npm publishing uses
+a pinned CLI with OIDC support.
 
 The PyPI and npm uploads are independent: one may succeed while the other fails.
 If that happens, fix the registry configuration and rerun **only failed jobs**.
 Alternatively, dispatch the same tag with `-f publish=true -f registry=pypi` or
 `-f publish=true -f registry=npm` to finish only that registry. The default
 `registry=both` publishes to both; the build and verification job always runs.
+If the package is already published to npm, dispatch from `master` and provide
+the existing tag explicitly so the build can skip npm's duplicate-version
+check. For example:
+
+```bash
+gh workflow run release.yml --repo Arbolencio/mcp-web-engine --ref master \
+  -f release_tag=v1.2.2 -f publish=true -f registry=pypi
+```
+
 Never move the release tag or overwrite/reuse a published version for changed
 artifacts. A change to a released package requires another version.
 
