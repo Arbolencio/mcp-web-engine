@@ -176,6 +176,11 @@ Process environment is authoritative. CWD `.env` files are **not** loaded automa
 
 ## Docker
 
+**Need SearXNG too?** Use the [local stack guide](docs/local-stack.md) and
+`compose.local.yml` to start both services with JSON search already enabled,
+loopback-only host ports and a live verification command. The existing setup
+below connects to a search backend you already run.
+
 ```bash
 # With API_KEY already exported as above:
 docker compose up --build -d

@@ -1,0 +1,19 @@
+use_default_settings: true
+
+general:
+  contact_url: https://github.com/Arbolencio/mcp-web-engine/issues
+
+search:
+  formats:
+    - html
+    - json
+
+server:
+  # This instance is published on host loopback only; no Valkey is required.
+  limiter: false
+  image_proxy: false
+
+outgoing:
+  # The gateway gives SearXNG four seconds to return its aggregated response.
+  request_timeout: 3.0
+  max_request_timeout: 3.0
