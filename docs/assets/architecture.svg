@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="700" viewBox="0 0 1100 700" role="img" aria-labelledby="title desc">
+  <title id="title">MCP Web Engine request paths and trust boundaries</title>
+  <desc id="desc">A client initializes the server over stdio or uses an HTTP route. web_search calls a trusted, operator-configured SearXNG backend which may be private, and SearXNG queries upstream engines. Public fetch and Markdown extraction instead pass URL, DNS and address validation, connection pinning and redirect checks before accessing public pages. HTTP authentication, quotas and persistent storage are separate concerns.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 10 5 0 10Z" fill="#475569"/>
+    </marker>
+  </defs>
+  <rect width="1100" height="700" rx="16" fill="#ffffff"/>
+  <g font-family="Arial, Helvetica, sans-serif" fill="#0f172a" text-anchor="middle">
+    <text x="550" y="36" font-size="25" font-weight="700">MCP Web Engine</text>
+    <text x="550" y="60" font-size="16" fill="#475569">Outbound request paths and separate trust boundaries</text>
+
+    <rect x="260" y="82" width="580" height="68" rx="12" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text x="550" y="110" font-size="19" font-weight="700">MCP client</text>
+    <text x="550" y="134" font-size="16">Local stdio or supported HTTP compatibility routes</text>
+
+    <rect x="70" y="184" width="960" height="126" rx="14" fill="#0f172a"/>
+    <text x="550" y="211" font-size="19" fill="#ffffff" font-weight="700">mcp-web-engine</text>
+    <rect x="100" y="230" width="300" height="56" rx="9" fill="#1e293b" stroke="#38bdf8"/>
+    <text x="250" y="264" font-size="19" fill="#7dd3fc" font-weight="700">web_search</text>
+    <rect x="450" y="230" width="250" height="56" rx="9" fill="#1e293b" stroke="#38bdf8"/>
+    <text x="575" y="264" font-size="19" fill="#7dd3fc" font-weight="700">fetch_url</text>
+    <rect x="730" y="230" width="270" height="56" rx="9" fill="#1e293b" stroke="#38bdf8"/>
+    <text x="865" y="264" font-size="19" fill="#7dd3fc" font-weight="700">extract_markdown</text>
+
+    <rect x="80" y="358" width="370" height="100" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+    <text x="265" y="386" font-size="19" font-weight="700">Trusted SearXNG backend</text>
+    <text x="265" y="412" font-size="16">Operator-configured; private IPs allowed</text>
+    <text x="265" y="436" font-size="16">JSON search output enabled</text>
+
+    <rect x="550" y="358" width="470" height="100" rx="12" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+    <text x="785" y="386" font-size="19" font-weight="700">Public-fetch controls</text>
+    <text x="785" y="412" font-size="16">Canonical URL + public DNS/address validation</text>
+    <text x="785" y="436" font-size="16">Connection pinning + per-hop redirect checks</text>
+
+    <rect x="80" y="510" width="370" height="70" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+    <text x="265" y="540" font-size="19" font-weight="700">Upstream search engines</text>
+    <text x="265" y="564" font-size="16">Receive search queries through SearXNG</text>
+    <rect x="550" y="510" width="470" height="70" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="785" y="540" font-size="19" font-weight="700">Public HTTP(S) pages</text>
+    <text x="785" y="564" font-size="16">Raw text or HTML converted to Markdown</text>
+
+    <text x="550" y="616" font-size="15" fill="#475569">Direct DuckDuckGo fallback: optional, disabled by default; queries go directly to DuckDuckGo.</text>
+    <text x="550" y="644" font-size="15" fill="#475569">Stdio uses initialization. Stateless HTTP is a project extension; SSE support is limited.</text>
+    <text x="550" y="672" font-size="15" fill="#475569">HTTP requires a bearer key and persists quotas/telemetry. Fetch controls complement network egress policy.</text>
+  </g>
+  <g fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)">
+    <path d="M550 150V184"/>
+    <path d="M250 286V330H265V358"/>
+    <path d="M575 286V330H785V358"/>
+    <path d="M865 286V330H785" marker-end="none"/>
+    <path d="M265 458V510"/>
+    <path d="M785 458V510"/>
+  </g>
+</svg>
