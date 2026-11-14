@@ -61,6 +61,8 @@ jobs:
           uv build --out-dir dist
           uvx twine check --strict dist/*.whl dist/*.tar.gz
           npm pack --ignore-scripts --pack-destination dist
+      - name: Validate the npm publish argument without uploading
+        run: npm exec --yes --package=npm@11.15.0 -- npm publish "$PWD"/dist/*.tgz --dry-run --access public --ignore-scripts
       - name: Exercise the installed wheel outside the checkout
         run: |
           python tests/artifact_smoke.py -- uv tool run --from "$PWD"/dist/*.whl mcp-web-engine
