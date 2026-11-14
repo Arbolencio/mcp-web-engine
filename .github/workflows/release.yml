@@ -115,4 +115,4 @@ jobs:
       - name: Use the trusted-publishing-capable npm CLI
         run: npm install --global npm@11.15.0
       - name: Publish the tested npm archive
-        run: npm publish artifacts/*.tgz --access public --ignore-scripts
+        run: npm publish "$PWD"/artifacts/*.tgz --access public --ignore-scripts
