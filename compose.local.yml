@@ -1,0 +1,55 @@
+# Standalone local stack: docker compose -f compose.local.yml up --build -d --wait
+name: mcp-web-engine-local
+
+services:
+  searxng:
+    # Official 2026.11.14-a7128d5d1 image. Review and update the digest deliberately.
+    image: searxng/searxng@sha256:eb8b09ffa83aebbe8b8d3ded23cfd224b2d3b01db4f3af9eb03876ef6def6dda
+    ports:
+      - "127.0.0.1:${LOCAL_SEARXNG_PORT:-8082}:8080"
+    environment:
+      SEARXNG_SECRET: "${SEARXNG_SECRET:?Generate a SearXNG secret; see docs/local-stack.md}"
+      SEARXNG_SETTINGS_PATH: /usr/local/searxng/mcp-settings.yml
+    volumes:
+      - ./searxng/settings.yml:/usr/local/searxng/mcp-settings.yml:ro
+      - searxng-data:/var/cache/searxng
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "/usr/local/searxng/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 6
+
+  mcp-web-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      searxng:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${LOCAL_MCP_PORT:-5050}:5050"
+    environment:
+      API_KEY: "${API_KEY:?Generate an API_KEY of at least 32 characters; see docs/local-stack.md}"
+      SEARXNG_URL: http://searxng:8080/search
+      ALLOW_DDG_FALLBACK: "false"
+      HOST: "0.0.0.0"
+      PORT: "5050"
+      LOG_LEVEL: INFO
+    restart: unless-stopped
+    volumes:
+      - local-usage-state:/home/appuser/.local/state/mcp-web-engine
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5050/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+volumes:
+  searxng-data:
+  local-usage-state:
