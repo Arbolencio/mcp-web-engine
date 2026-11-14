@@ -3,6 +3,15 @@ name: Release packages
 on:
   workflow_dispatch:
     inputs:
+      registry:
+        description: Registry to publish to after verification
+        type: choice
+        required: true
+        default: both
+        options:
+          - both
+          - pypi
+          - npm
       publish:
         description: Publish verified artifacts to PyPI and npm (trusted publishers required)
         type: boolean
@@ -61,6 +70,8 @@ jobs:
           uv build --out-dir dist
           uvx twine check --strict dist/*.whl dist/*.tar.gz
           npm pack --ignore-scripts --pack-destination dist
+      - name: Validate the npm publish argument without uploading
+        run: npm exec --yes --package=npm@11.15.0 -- npm publish "$PWD"/dist/*.tgz --dry-run --access public --ignore-scripts
       - name: Exercise the installed wheel outside the checkout
         run: |
           python tests/artifact_smoke.py -- uv tool run --from "$PWD"/dist/*.whl mcp-web-engine
@@ -75,7 +86,7 @@ jobs:
           if-no-files-found: error
 
   pypi:
-    if: inputs.publish
+    if: inputs.publish && (inputs.registry == 'both' || inputs.registry == 'pypi')
     needs: build
     runs-on: ubuntu-latest
     environment: pypi
@@ -96,7 +107,7 @@ jobs:
           packages-dir: python-dist/
 
   npm:
-    if: inputs.publish
+    if: inputs.publish && (inputs.registry == 'both' || inputs.registry == 'npm')
     needs: build
     runs-on: ubuntu-latest
     environment: npm
@@ -115,4 +126,4 @@ jobs:
       - name: Use the trusted-publishing-capable npm CLI
         run: npm install --global npm@11.15.0
       - name: Publish the tested npm archive
-        run: npm publish artifacts/*.tgz --access public --ignore-scripts
+        run: npm publish "$PWD"/artifacts/*.tgz --access public --ignore-scripts
