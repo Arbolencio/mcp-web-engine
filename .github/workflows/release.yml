@@ -3,6 +3,15 @@ name: Release packages
 on:
   workflow_dispatch:
     inputs:
+      registry:
+        description: Registry to publish to after verification
+        type: choice
+        required: true
+        default: both
+        options:
+          - both
+          - pypi
+          - npm
       publish:
         description: Publish verified artifacts to PyPI and npm (trusted publishers required)
         type: boolean
@@ -77,7 +86,7 @@ jobs:
           if-no-files-found: error
 
   pypi:
-    if: inputs.publish
+    if: inputs.publish && (inputs.registry == 'both' || inputs.registry == 'pypi')
     needs: build
     runs-on: ubuntu-latest
     environment: pypi
@@ -98,7 +107,7 @@ jobs:
           packages-dir: python-dist/
 
   npm:
-    if: inputs.publish
+    if: inputs.publish && (inputs.registry == 'both' || inputs.registry == 'npm')
     needs: build
     runs-on: ubuntu-latest
     environment: npm

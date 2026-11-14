@@ -80,6 +80,9 @@ registry credentials. npm publishing uses a pinned CLI with OIDC support.
 
 The PyPI and npm uploads are independent: one may succeed while the other fails.
 If that happens, fix the registry configuration and rerun **only failed jobs**.
+Alternatively, dispatch the same tag with `-f publish=true -f registry=pypi` or
+`-f publish=true -f registry=npm` to finish only that registry. The default
+`registry=both` publishes to both; the build and verification job always runs.
 Never move the release tag or overwrite/reuse a published version for changed
 artifacts. A change to a released package requires another version.
 
