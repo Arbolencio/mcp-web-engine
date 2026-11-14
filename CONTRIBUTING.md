@@ -8,7 +8,7 @@ Use Python 3.11+ and [uv](https://docs.astral.sh/uv/). From your fork's checkout
 
 ```bash
 uv sync --locked --extra test
-uv run --locked pytest -q
+uv run --locked python -m pytest -q
 uv run --with build python -m build
 npm pack --dry-run --json --ignore-scripts
 ```
@@ -20,3 +20,5 @@ Tests are offline by default; do not require a live search backend. Keep test cr
 Dependency changes belong in `pyproject.toml`; regenerate and review `uv.lock` together. Docker validates that lock and installs its hashed runtime dependency set. Do not commit secrets, local `.env` files, caches or generated distributions.
 
 CI builds wheel, sdist and npm archives, installs wheel/npm artifacts outside the checkout and checks stdio with `tests/artifact_smoke.py`. Include test evidence with your PR; do not publish or bump versions as part of an unrelated fix.
+
+For a release, follow [docs/releases.md](docs/releases.md).

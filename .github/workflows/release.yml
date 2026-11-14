@@ -1,0 +1,118 @@
+name: Release packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish verified artifacts to PyPI and npm (trusted publishers required)
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'Arbolencio/mcp-web-engine' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: astral-sh/setup-uv@v6
+      - name: Validate release tag, versions and source
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import ast, json, os, re, subprocess, tomllib
+          from pathlib import Path
+          tag = os.environ['RELEASE_TAG']
+          assert re.fullmatch(r'v\d+\.\d+\.\d+', tag), 'Expected a stable vX.Y.Z tag'
+          version = tag[1:]
+          assert tomllib.loads(Path('pyproject.toml').read_text())['project']['version'] == version
+          assert json.loads(Path('package.json').read_text())['version'] == version
+          tree = ast.parse(Path('src/mcp_web_engine/__init__.py').read_text())
+          versions = [ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == '__version__' for t in n.targets)]
+          assert versions == [version], 'Runtime version differs from release tag'
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert head == os.environ['GITHUB_SHA'], 'Source differs from workflow commit'
+          assert subprocess.check_output(['git', 'rev-parse', f'refs/tags/{tag}^{{commit}}'], text=True).strip() == head
+          subprocess.run(['git', 'merge-base', '--is-ancestor', 'HEAD', 'origin/master'], check=True)
+          print(f'Release {tag}: versions match and source is on master')
+          PY
+      - name: Install and run the offline suite
+        run: |
+          uv sync --locked --extra test
+          uv run --locked python -m pytest -q
+      - name: Build and check distributions
+        run: |
+          uv build --out-dir dist
+          uvx twine check --strict dist/*.whl dist/*.tar.gz
+          npm pack --ignore-scripts --pack-destination dist
+      - name: Exercise the installed wheel outside the checkout
+        run: |
+          python tests/artifact_smoke.py -- uv tool run --from "$PWD"/dist/*.whl mcp-web-engine
+      - name: Exercise the installed npm archive outside the checkout
+        run: |
+          npm install --prefix "$RUNNER_TEMP/npm-release" --ignore-scripts "$PWD"/dist/*.tgz
+          python tests/artifact_smoke.py -- "$RUNNER_TEMP/npm-release/node_modules/.bin/mcp-web-engine"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-distributions
+          path: dist/*
+          if-no-files-found: error
+
+  pypi:
+    if: inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-distributions
+          path: artifacts
+      - name: Select the tested Python artifacts
+        run: |
+          mkdir python-dist
+          cp artifacts/*.whl artifacts/*.tar.gz python-dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python-dist/
+
+  npm:
+    if: inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-distributions
+          path: artifacts
+      - name: Use the trusted-publishing-capable npm CLI
+        run: npm install --global npm@11.15.0
+      - name: Publish the tested npm archive
+        run: npm publish artifacts/*.tgz --access public --ignore-scripts

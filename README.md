@@ -4,14 +4,14 @@
 [![PyPI](https://img.shields.io/pypi/v/mcp-web-engine)](https://pypi.org/project/mcp-web-engine/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/license/mit)
 
-**Give your MCP client web search, public-page fetching and Markdown extraction through a self-hostable server.** For developers using Claude Desktop, Cursor, VS Code or their own MCP agents who want an operator-controlled SearXNG backend. Current release: **1.2.1**.
+**Give your MCP client web search, public-page fetching and Markdown extraction through a self-hostable server.** For developers using Claude Desktop, Cursor, VS Code or their own MCP agents who want an operator-controlled SearXNG backend. Current release: **1.2.2**.
 
 Use it to research a question and inspect its sources, fetch public documentation while coding, or turn a public article into Markdown for further analysis. It is not a browser automation service: authenticated pages and JavaScript rendering are outside its scope.
 
 ## Contents
 
 - [Tools](#tools)
-- [Recorded demo](#recorded-demo)
+- [Recorded demo](#recorded-demo-3060-seconds)
 - [Use cases](#use-cases)
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
@@ -37,8 +37,6 @@ Use it to research a question and inspect its sources, fetch public documentatio
 
 Use `tools/list` for authoritative schemas and bounds.
 
-<a id="recorded-demo"></a>
-
 ## Recorded demo (30–60 seconds)
 
 ![Recorded MCP stdio tool execution replay](https://raw.githubusercontent.com/Arbolencio/mcp-web-engine/master/docs/assets/demo.gif)
@@ -53,7 +51,7 @@ This 35-second replay of **real tool execution** is paced for readability: not a
 
 ## Architecture
 
-![Request paths: web_search uses the trusted SearXNG backend; fetch_url and extract_markdown validate and pin public destinations before fetching pages.](docs/assets/architecture.svg)
+![Request paths: web_search uses the trusted SearXNG backend; fetch_url and extract_markdown validate and pin public destinations before fetching pages.](https://raw.githubusercontent.com/Arbolencio/mcp-web-engine/v1.2.2/docs/assets/architecture.png)
 
 `web_search` sends queries to the operator-configured SearXNG backend, which may
 use a private address. SearXNG and its upstream engines receive those queries.
@@ -82,7 +80,7 @@ Use this when you want an MCP server without cloning the repository. Requirement
 Launch the pinned npm release (it waits for a stdio client):
 
 ```bash
-npx --yes mcp-web-engine@1.2.1
+npx --yes mcp-web-engine@1.2.2
 ```
 
 For actual agent use, paste this into your MCP client's server configuration and replace the SearXNG URL with yours:
@@ -92,7 +90,7 @@ For actual agent use, paste this into your MCP client's server configuration and
   "mcpServers": {
     "mcp-web-engine": {
       "command": "npx",
-      "args": ["--yes", "mcp-web-engine@1.2.1"],
+      "args": ["--yes", "mcp-web-engine@1.2.2"],
       "env": {
         "SEARXNG_URL": "http://127.0.0.1:8082/search",
         "ALLOW_DDG_FALLBACK": "false"
@@ -102,7 +100,7 @@ For actual agent use, paste this into your MCP client's server configuration and
 }
 ```
 
-Ready-to-copy files: [Linux/macOS](examples/npm-stdio.json) and [Windows](examples/npm-stdio.windows.json). On Windows the example uses `cmd /c npx` for the npm command shim. The stdio server waits for a client: silence after manually running `npx --yes mcp-web-engine@1.2.1` is normal, not a chat prompt. Initialization lists three tools; a working search backend is needed only when you search. First launch may access package indexes.
+Ready-to-copy files: [Linux/macOS](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/examples/npm-stdio.json) and [Windows](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/examples/npm-stdio.windows.json). On Windows the example uses `cmd /c npx` for the npm command shim. The stdio server waits for a client: silence after manually running `npx --yes mcp-web-engine@1.2.2` is normal, not a chat prompt. Initialization lists three tools; a working search backend is needed only when you search. First launch may access package indexes.
 
 **If setup fails:** check `node --version` and `uv --version` in the environment used by the client. Desktop clients may not inherit your interactive shell's PATH; supply the absolute executable path if needed. If tools appear but search fails, verify SearXNG's `/search?q=test&format=json` endpoint returns JSON, not an HTML page or a disabled-JSON error. Local stdio does not need an HTTP API key.
 
@@ -111,7 +109,7 @@ Ready-to-copy files: [Linux/macOS](examples/npm-stdio.json) and [Windows](exampl
 **Claude Desktop**
 
 1. Open **Settings → Developer → Edit Config** to locate `claude_desktop_config.json`.
-2. Merge the `mcpServers` entry above into that file (do not overwrite existing servers). Use [the Windows configuration](examples/npm-stdio.windows.json) on Windows or [Linux/macOS configuration](examples/npm-stdio.json) elsewhere.
+2. Merge the `mcpServers` entry above into that file (do not overwrite existing servers). Use [the Windows configuration](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/examples/npm-stdio.windows.json) on Windows or [Linux/macOS configuration](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/examples/npm-stdio.json) elsewhere.
 3. Save, fully restart Claude Desktop and check the available tools. Ask it to search a topic with `web_search`, then fetch a public result with `fetch_url` or `extract_markdown`; approve calls when prompted.
 
 See the [official local-server guide](https://modelcontextprotocol.io/quickstart/user).
@@ -126,7 +124,7 @@ See [Cursor's official MCP documentation](https://cursor.com/docs/mcp).
 
 **VS Code**
 
-1. Copy [examples/vscode-mcp.json](examples/vscode-mcp.json) to your workspace's `.vscode/mcp.json`; on Windows use [examples/vscode-mcp.windows.json](examples/vscode-mcp.windows.json).
+1. Copy [examples/vscode-mcp.json](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/examples/vscode-mcp.json) to your workspace's `.vscode/mcp.json`; on Windows use [examples/vscode-mcp.windows.json](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/examples/vscode-mcp.windows.json).
 2. Set your SearXNG URL. VS Code uses a top-level **`servers`**, not `mcpServers`, and each entry explicitly sets `"type": "stdio"`. Do not paste the Claude/Cursor JSON unchanged.
 3. Use **MCP: List Servers** in the Command Palette to start the server, review the trust prompt, then enable its tools in agent chat. Request a search and inspect the tool result.
 
@@ -143,11 +141,11 @@ python -m venv .venv
 # Linux/macOS:
 . .venv/bin/activate
 # Windows PowerShell instead: .venv\Scripts\Activate.ps1
-python -m pip install "mcp-web-engine==1.2.1"
+python -m pip install "mcp-web-engine==1.2.2"
 mcp-web-engine --version
 ```
 
-In your client configuration, replace `command` with the absolute path to `.venv/bin/mcp-web-engine` (Windows: `.venv\Scripts\mcp-web-engine.exe`) and use `"args": []`; keep the backend environment settings. Escape Windows backslashes as `\\` inside JSON. This route needs Python and pip, not Node or uv. The same SearXNG requirements apply. Alternatively, with uv installed: `uvx --from mcp-web-engine==1.2.1 mcp-web-engine`.
+In your client configuration, replace `command` with the absolute path to `.venv/bin/mcp-web-engine` (Windows: `.venv\Scripts\mcp-web-engine.exe`) and use `"args": []`; keep the backend environment settings. Escape Windows backslashes as `\\` inside JSON. This route needs Python and pip, not Node or uv. The same SearXNG requirements apply. Alternatively, with uv installed: `uvx --from mcp-web-engine==1.2.2 mcp-web-engine`.
 
 ## Local stdio
 
@@ -175,9 +173,9 @@ Client configuration (replace the absolute checkout path):
 }
 ```
 
-For a pinned public installation use `uvx --from mcp-web-engine==1.2.1 mcp-web-engine` or `npx --yes mcp-web-engine@1.2.1`. These pin the project version, not its transitive dependencies. The clone above follows the repository default branch, not a release pin; use a reviewed commit and `uv sync --locked` for source deployments.
+For a pinned public installation use `uvx --from mcp-web-engine==1.2.2 mcp-web-engine` or `npx --yes mcp-web-engine@1.2.2`. These pin the project version, not its transitive dependencies. The clone above follows the repository default branch, not a release pin; use a reviewed commit and `uv sync --locked` for source deployments.
 
-The npm tarball includes the canonical Python src package and build metadata. `npx --package /absolute/path/mcp-web-engine-1.2.1.tgz mcp-web-engine` delegates to uv; Python/uv remain prerequisites, and first launch may need network access for dependencies.
+The npm tarball includes the canonical Python src package and build metadata. `npx --package /absolute/path/mcp-web-engine-1.2.2.tgz mcp-web-engine` delegates to uv; Python/uv remain prerequisites, and first launch may need network access for dependencies.
 
 ## HTTP
 
@@ -212,7 +210,7 @@ Process environment is authoritative. CWD `.env` files are **not** loaded automa
 
 ## Docker
 
-**Need SearXNG too?** Use the [local stack guide](docs/local-stack.md) and
+**Need SearXNG too?** Use the [local stack guide](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/docs/local-stack.md) and
 `compose.local.yml` to start both services with JSON search already enabled,
 loopback-only host ports and a live verification command. The existing setup
 below connects to a search backend you already run.
@@ -222,7 +220,7 @@ below connects to a search backend you already run.
 docker compose up --build -d
 ```
 
-The image installs the Python package, runs as a non-root user and explicitly starts `mcp-web-engine --serve` on port 5050. Compose publishes **only host loopback**. Container `HOST=0.0.0.0` is necessary for that port mapping; do not confuse it with the host binding. Set `SEARXNG_URL` to a reachable backend: compose defaults to `http://host.docker.internal:8082/search`, using the host gateway. An instance bound only to host loopback may not be reachable from Docker. No SearXNG instance or credentials are bundled. See [operations and limitations](docs/operations.md).
+The image installs the Python package, runs as a non-root user and explicitly starts `mcp-web-engine --serve` on port 5050. Compose publishes **only host loopback**. Container `HOST=0.0.0.0` is necessary for that port mapping; do not confuse it with the host binding. Set `SEARXNG_URL` to a reachable backend: compose defaults to `http://host.docker.internal:8082/search`, using the host gateway. An instance bound only to host loopback may not be reachable from Docker. No SearXNG instance or credentials are bundled. See [operations and limitations](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/docs/operations.md).
 
 ## Troubleshooting
 
@@ -231,15 +229,15 @@ The image installs the Python package, runs as a non-root user and explicitly st
 | The stdio command starts but prints nothing | It is waiting for an MCP client to send JSON-RPC messages. Connect it through your client's server configuration. |
 | The client reports `ENOENT` or cannot find `uv`, `uvx` or `npx` | Check the executable in the client's environment. GUI clients may have a different `PATH`; use an absolute executable path when needed. |
 | Tools appear, but search returns `SEARXNG_UNAVAILABLE` | Check that your SearXNG `/search?q=test&format=json` returns a JSON object with a `results` array. Verify the backend address, JSON configuration, network access and service logs. |
-| A container cannot reach SearXNG | Container loopback refers to that container. Use a reachable host gateway or a shared Docker network; the host service must listen on an address reachable from that network. `host.docker.internal` alone does not expose a loopback-only host service. The [local stack](docs/local-stack.md) connects by service name. |
-| The local stack cannot bind a host port | Set `LOCAL_SEARXNG_PORT` or `LOCAL_MCP_PORT` to a free port and update host-side clients/probes. This includes conflicts with local model servers. See the [local stack guide](docs/local-stack.md). |
+| A container cannot reach SearXNG | Container loopback refers to that container. Use a reachable host gateway or a shared Docker network; the host service must listen on an address reachable from that network. `host.docker.internal` alone does not expose a loopback-only host service. The [local stack](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/docs/local-stack.md) connects by service name. |
+| The local stack cannot bind a host port | Set `LOCAL_SEARXNG_PORT` or `LOCAL_MCP_PORT` to a free port and update host-side clients/probes. This includes conflicts with local model servers. See the [local stack guide](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/docs/local-stack.md). |
 | HTTP startup rejects the API key, or a protected request returns 401 | `--serve` requires an operator-generated key of at least 32 non-whitespace characters. Use the same key in the `Authorization: Bearer` header. Local stdio does not need it. |
 | Changes to a working-directory `.env` have no effect | Set `MCP_WEB_ENGINE_ENV_FILE` to an existing absolute file path, or export variables in the server process's environment. Process variables take precedence. Compose separately reads `.env` for interpolation. |
-| `/health` passes but search fails | Health checks report liveness. Use the [local stack live probe](docs/local-stack.md#verify-the-setup) to check actual search, fetching and extraction. |
+| `/health` passes but search fails | Health checks report liveness. Use the [local stack live probe](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/docs/local-stack.md#verify-the-setup) to check actual search, fetching and extraction. |
 | A public-fetch tool rejects a local or private URL | This is expected SSRF policy. The trusted SearXNG backend is a separate path; its private address does not permit tools to fetch arbitrary private URLs. |
 
 For client JSON examples, see [client setup](#connect-your-client). For state
-permissions, persistence and deployment boundaries, see [operations](docs/operations.md).
+permissions, persistence and deployment boundaries, see [operations](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/docs/operations.md).
 
 ## Security controls and limitations
 
@@ -247,13 +245,13 @@ Public fetches validate schemes, resolved addresses and redirects, rejecting loo
 
 SearXNG is an intentional trusted-backend exception to public-fetch restrictions and can use a private address. Its operator and upstream engines receive queries; self-hosting does not keep searches entirely on-host. DuckDuckGo fallback is off by default, but ordinary SearXNG searches still involve upstream services. Fetched pages are untrusted input and may contain prompt injection. Dependency isolation does not isolate filesystem/network access. HTTP authentication is not TLS or a multi-host distributed rate limiter; use a restricted network and a TLS reverse proxy when needed. Do not expose the service directly to the Internet.
 
-HTTP mode persists admission counters and tool telemetry keyed by hashed key IDs in local SQLite; operator-managed JSON credentials are stored separately. Self-hosting is not a promise of no logging or no disk writes: review logging, state paths, retention and filesystem permissions before handling sensitive workloads. See [operations and limitations](docs/operations.md).
+HTTP mode persists admission counters and tool telemetry keyed by hashed key IDs in local SQLite; operator-managed JSON credentials are stored separately. Self-hosting is not a promise of no logging or no disk writes: review logging, state paths, retention and filesystem permissions before handling sensitive workloads. See [operations and limitations](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/docs/operations.md).
 
 ## Development and artifact verification
 
 ```bash
 uv sync --locked --extra test
-uv run --locked pytest -q
+uv run --locked python -m pytest -q
 uv run --with build python -m build
 npm pack
 python3 tests/artifact_smoke.py -- uv tool run --from /absolute/path/to/package.whl mcp-web-engine
@@ -263,10 +261,12 @@ Tests are offline by default. The artifact smoke sends no search query: initiali
 
 ## Contributing and security reports
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, test
-requirements and distribution checks. Follow [SECURITY.md](SECURITY.md) to report
+Read [CONTRIBUTING.md](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/CONTRIBUTING.md) for the development workflow, test
+requirements and distribution checks. Follow [SECURITY.md](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/SECURITY.md) to report
 a suspected vulnerability.
+
+For release notes, see the [changelog](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/CHANGELOG.md). Maintainers can follow the [release guide](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/docs/releases.md).
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+MIT License. See [LICENSE](https://github.com/Arbolencio/mcp-web-engine/blob/v1.2.2/LICENSE).

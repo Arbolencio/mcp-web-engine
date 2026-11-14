@@ -1,6 +1,6 @@
 {
   "name": "mcp-web-engine",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Self-hostable MCP search, public-page fetch and Markdown extraction",
   "main": "bin/cli.js",
   "bin": {
@@ -14,6 +14,9 @@
     "src/mcp_web_engine/*.py",
     "pyproject.toml",
     "docs/operations.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
     "requirements.txt",
     "README.md",
     "LICENSE",

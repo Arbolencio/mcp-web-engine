@@ -17,7 +17,7 @@ def test_vscode_configuration_uses_native_schema_and_pinned_launcher(windows):
     assert server["type"] == "stdio"
     assert server["command"] == ("cmd" if windows else "npx")
     assert server["args"] == (["/c", "npx"] if windows else []) + [
-        "--yes", "mcp-web-engine@1.2.1"
+        "--yes", "mcp-web-engine@1.2.2"
     ]
     assert server["env"] == {
         "SEARXNG_URL": "http://127.0.0.1:8082/search",
@@ -39,7 +39,7 @@ def test_readme_adoption_and_demo_scope():
         "https://code.visualstudio.com/docs/agent-customization/mcp-servers",
         "https://cursor.com/docs/mcp",
         "https://modelcontextprotocol.io/quickstart/user",
-        "python -m venv", "mcp-web-engine==1.2.1",
+        "python -m venv", "mcp-web-engine==1.2.2",
         "Node 18/22", "no full end-to-end GUI",
         "SQLite", "hashed", "queries", "upstream",
     ):
