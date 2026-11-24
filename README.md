@@ -6,6 +6,8 @@
 
 **Give your MCP client web search, public-page fetching and Markdown extraction through a self-hostable server.** For developers using Claude Desktop, Cursor, VS Code or their own MCP agents who want an operator-controlled SearXNG backend. Current release: **1.2.2**.
 
+[![Arbolencio/mcp-web-engine MCP server](https://glama.ai/mcp/servers/Arbolencio/mcp-web-engine/badges/score.svg)](https://glama.ai/mcp/servers/Arbolencio/mcp-web-engine)
+
 Use it to research a question and inspect its sources, fetch public documentation while coding, or turn a public article into Markdown for further analysis. It is not a browser automation service: authenticated pages and JavaScript rendering are outside its scope.
 
 ## Contents
